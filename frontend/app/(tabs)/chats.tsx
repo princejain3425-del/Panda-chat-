@@ -20,6 +20,7 @@ import { apiFetch, getWsUrl } from "@/src/api";
 import { ConversationView, Message, User } from "@/src/types";
 import { useTheme } from "@/src/theme-context";
 import { radius, spacing, typography, Palette } from "@/src/theme";
+import { PandaBackground } from "@/src/components/PandaBackground";
 
 function formatTime(iso: string): string {
   try {
@@ -239,7 +240,8 @@ export default function ChatsScreen() {
   };
 
   return (
-    <SafeAreaView testID="chats-screen" edges={["top"]} style={styles.container}>
+    <PandaBackground>
+      <SafeAreaView testID="chats-screen" edges={["top"]} style={styles.container}>
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Chats</Text>
@@ -347,6 +349,7 @@ export default function ChatsScreen() {
         <Ionicons name="add" size={26} color={colors.onBrandPrimary} />
       </TouchableOpacity>
     </SafeAreaView>
+    </PandaBackground>
   );
 }
 
@@ -354,7 +357,7 @@ const makeStyles = (colors: Palette) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.surface,
+      backgroundColor: "transparent",
     },
     header: {
       paddingHorizontal: spacing.lg,

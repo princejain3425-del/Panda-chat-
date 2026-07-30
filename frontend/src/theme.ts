@@ -1,4 +1,4 @@
-// Omega Chat theme tokens — white + pink accents, light & dark modes.
+// Panda Chat theme tokens — white + panda green, light & dark modes.
 
 export type ThemeMode = "light" | "dark" | "system";
 
@@ -29,51 +29,51 @@ export type Palette = {
 
 export const lightPalette: Palette = {
   surface: "#FFFFFF",
-  onSurface: "#17161B",
-  surfaceSecondary: "#FBF6F8",
-  onSurfaceSecondary: "#4A4548",
-  surfaceTertiary: "#F5EBEF",
-  onSurfaceTertiary: "#7A6E74",
-  surfaceInverse: "#17161B",
+  onSurface: "#131A16",
+  surfaceSecondary: "#F5F8F2",
+  onSurfaceSecondary: "#3F4A44",
+  surfaceTertiary: "#E7EEDF",
+  onSurfaceTertiary: "#6B786F",
+  surfaceInverse: "#131A16",
   onSurfaceInverse: "#FFFFFF",
-  brandPrimary: "#EC4899",
+  brandPrimary: "#3F7E44",
   onBrandPrimary: "#FFFFFF",
-  brandSecondary: "#F472B6",
+  brandSecondary: "#68A26C",
   onBrandSecondary: "#FFFFFF",
-  brandTertiary: "#FCE7F3",
-  onBrandTertiary: "#831843",
+  brandTertiary: "#D5E6CE",
+  onBrandTertiary: "#1F3A22",
   success: "#16A34A",
-  warning: "#D97706",
-  error: "#DC2626",
+  warning: "#B88B42",
+  error: "#B5534A",
   onError: "#FFFFFF",
-  border: "#EFE6EA",
-  borderStrong: "#D4CBCF",
-  divider: "#F3EBEE",
-  overlay: "rgba(23,22,27,0.5)",
+  border: "#E1E9D9",
+  borderStrong: "#B8C4AA",
+  divider: "#EEF3E7",
+  overlay: "rgba(19,26,22,0.5)",
 };
 
 export const darkPalette: Palette = {
-  surface: "#151317",
-  onSurface: "#FBF6F8",
-  surfaceSecondary: "#211D22",
-  onSurfaceSecondary: "#C4BABE",
-  surfaceTertiary: "#2C262C",
-  onSurfaceTertiary: "#8B8087",
-  surfaceInverse: "#FBF6F8",
-  onSurfaceInverse: "#151317",
-  brandPrimary: "#F472B6",
-  onBrandPrimary: "#151317",
-  brandSecondary: "#EC4899",
+  surface: "#0E120F",
+  onSurface: "#F1F6EB",
+  surfaceSecondary: "#161C18",
+  onSurfaceSecondary: "#C0CBBA",
+  surfaceTertiary: "#1F2620",
+  onSurfaceTertiary: "#7C8879",
+  surfaceInverse: "#F1F6EB",
+  onSurfaceInverse: "#0E120F",
+  brandPrimary: "#7FBF77",
+  onBrandPrimary: "#0E120F",
+  brandSecondary: "#4E9155",
   onBrandSecondary: "#FFFFFF",
-  brandTertiary: "#3A2530",
-  onBrandTertiary: "#FCE7F3",
+  brandTertiary: "#233022",
+  onBrandTertiary: "#D5E6CE",
   success: "#4ADE80",
   warning: "#FBBF24",
   error: "#F87171",
-  onError: "#151317",
-  border: "#332C33",
-  borderStrong: "#504853",
-  divider: "#26212A",
+  onError: "#0E120F",
+  border: "#2A322C",
+  borderStrong: "#4A5548",
+  divider: "#1D231F",
   overlay: "rgba(0,0,0,0.6)",
 };
 
@@ -104,4 +104,4 @@ export const typography = {
   display: 32,
 };
 
-export const APP_NAME = "Omega Chat";
+export const APP_NAME = "Panda Chat";

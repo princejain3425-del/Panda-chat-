@@ -125,20 +125,24 @@ class ConversationView(BaseModel):
 
 
 class MessageCreate(BaseModel):
-    type: Literal["text", "image", "video"] = "text"
+    type: Literal["text", "image", "video", "document"] = "text"
     text: Optional[str] = None
     media_base64: Optional[str] = None  # data URL or raw base64
     media_mime: Optional[str] = None
+    filename: Optional[str] = None
+    filesize: Optional[int] = None
 
 
 class Message(BaseModel):
     message_id: str
     conversation_id: str
     sender_id: str
-    type: Literal["text", "image", "video"]
+    type: Literal["text", "image", "video", "document"]
     text: Optional[str] = None
     media_base64: Optional[str] = None
     media_mime: Optional[str] = None
+    filename: Optional[str] = None
+    filesize: Optional[int] = None
     created_at: datetime
     read_at: Optional[datetime] = None
 
@@ -448,7 +452,12 @@ async def send_message(
     else:
         if not payload.media_base64:
             raise HTTPException(status_code=400, detail="Missing media")
-        preview = "📷 Photo" if payload.type == "image" else "🎥 Video"
+        if payload.type == "image":
+            preview = "📷 Photo"
+        elif payload.type == "video":
+            preview = "🎥 Video"
+        else:
+            preview = f"📎 {payload.filename or 'File'}"
 
     msg_doc = {
         "message_id": make_id("msg"),
@@ -458,6 +467,8 @@ async def send_message(
         "text": payload.text.strip() if payload.text else None,
         "media_base64": payload.media_base64,
         "media_mime": payload.media_mime,
+        "filename": payload.filename,
+        "filesize": payload.filesize,
         "created_at": now_utc(),
         "read_at": None,
     }
@@ -609,7 +620,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
 
 @api_router.get("/")
 async def root():
-    return {"message": "Omega Chat API", "ok": True}
+    return {"message": "Panda Chat API", "ok": True}
 
 
 app.include_router(api_router)

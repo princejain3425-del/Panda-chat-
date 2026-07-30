@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 4 backend testing complete for Panda Chat (rebranded from Omega Chat). All 80 pytest tests pass — 65 regression (test_api.py 19, test_iteration2.py 15, test_iteration3.py 29, test_ws.py 2) plus 15 new iter-4 tests covering the 'document' message type. New coverage: (1) POST /api/conversations/{id}/messages with type=document returns full Message with filename/filesize/media_mime/media_base64 echoed back plus message_id/conversation_id/sender_id/created_at/read_at=null; MongoDB _id not leaked. (2) Sending a document updates last_message to '📎 <filename>' and last_message_type='document' in GET /api/conversations. (3) GET /api/conversations/{id}/messages returns document messages with all fields (filename, filesize, media_mime, media_base64) intact. (4) Sending document without media_base64 returns 400 with 'media' in detail. (5) Sending document without filename falls back to '📎 File' preview. (6) Pydantic Literal validation returns 422 for unknown types ('audio', 'sticker', 'gif', 'location', ''). (7) Regression: text preview keeps trimmed text, image → '📷 Photo', video → '🎥 Video', image without media still 400. (8) Regression: mark-read cycles preserve filename/filesize/media_mime/media_base64 on document messages; read_at properly populated across multiple send+read cycles. Backend server.py is clean, uses Literal['text','image','video','document'] on both MessageCreate and Message models.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_api.py",
+    "/app/backend/tests/test_iteration2.py",
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/test_iteration4.py",
+    "/app/backend/tests/test_ws.py",
+    "/app/backend/tests/pytest.ini",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py MessageCreate.type and Message.type both use Literal['text','image','video','document'] — pydantic will correctly emit 422 for any other value. Verified.",
+    "send_message preview logic: text→trimmed text[:120], image→'📷 Photo', video→'🎥 Video', else→'📎 <filename or File>'. Because the else branch fires for anything non-text/image/video and only 'document' is allowed by the Literal, the '📎' preview is document-specific. Correct.",
+    "Missing-media check runs before preview computation for all non-text types (image, video, document) — 400 is consistent across binary types.",
+    "filename/filesize are Optional[str]/Optional[int] on both Message and MessageCreate; nothing enforces non-empty filename or positive filesize on the server. This is fine per spec (client validates), but could be tightened later.",
+    "server.py still uses deprecated @app.on_event startup/shutdown handlers (carried over from iter 1–3). Non-blocking.",
+    "No max-size guard on media_base64 — a large PDF could balloon Mongo doc size. Consider a size cap or streaming/S3 offload for production. Non-blocking for MVP."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration4.py (new — 15 tests across 4 classes: TestSendDocument (5), TestUnknownTypeValidation (5 parametrized), TestRegressionOtherTypes (4), TestReadReceiptsPreserveDocumentFields (1))"
+  ],
+  "success_rate": {"backend": "100% (80/80)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "Reused existing conftest.py fixtures (user_alice/user_bob). Each iter-4 test opens a fresh 1:1 conversation between alice and bob and cleans up via the alice fixture teardown (which deletes conversations + messages).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Full suite at /app/backend/tests/ now has 80 tests. Run: `cd /app && python -m pytest backend/tests/ -v --junitxml=/app/test_reports/pytest/pytest_results.xml`. Backend URL from EXPO_PUBLIC_BACKEND_URL in frontend/.env. Auth via stub sessions inserted into MongoDB via fixtures. New in iter-4: document message type covered by test_iteration4.py — including send, preview, missing-media 400, unknown-type 422, and read-receipt preservation.",
+  "rca_of_issue": "N/A — all iteration-4 features validated successfully on first run; no fixes were needed."
+}

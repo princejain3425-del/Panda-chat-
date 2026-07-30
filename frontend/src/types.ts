@@ -22,10 +22,12 @@ export type Message = {
   message_id: string;
   conversation_id: string;
   sender_id: string;
-  type: "text" | "image" | "video";
+  type: "text" | "image" | "video" | "document";
   text?: string | null;
   media_base64?: string | null;
   media_mime?: string | null;
+  filename?: string | null;
+  filesize?: number | null;
   created_at: string;
   read_at?: string | null;
 };

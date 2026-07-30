@@ -11,6 +11,7 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Modal,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -23,6 +24,8 @@ import { apiFetch, getWsUrl } from "@/src/api";
 import { Message } from "@/src/types";
 import { useTheme } from "@/src/theme-context";
 import { Palette, radius, spacing, typography } from "@/src/theme";
+import { PandaBackground } from "@/src/components/PandaBackground";
+import * as DocumentPicker from "expo-document-picker";
 
 function formatTime(iso: string): string {
   try {
@@ -31,6 +34,18 @@ function formatTime(iso: string): string {
   } catch {
     return "";
   }
+}
+
+function formatFileSize(bytes?: number | null): string {
+  if (!bytes || bytes <= 0) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  let v = bytes;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
 export default function ChatDetailScreen() {
@@ -52,6 +67,7 @@ export default function ChatDetailScreen() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [peerTyping, setPeerTyping] = useState(false);
+  const [attachSheetOpen, setAttachSheetOpen] = useState(false);
   const listRef = useRef<FlatList<Message>>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const typingSentRef = useRef(false);
@@ -200,6 +216,7 @@ export default function ChatDetailScreen() {
   };
 
   const pickMedia = async () => {
+    setAttachSheetOpen(false);
     const permission = await ImagePicker.getMediaLibraryPermissionsAsync();
     if (permission.status !== "granted") {
       if (!permission.canAskAgain) {
@@ -288,6 +305,71 @@ export default function ChatDetailScreen() {
     }
   };
 
+  const pickDocument = async () => {
+    setAttachSheetOpen(false);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      const size = asset.size || 0;
+      if (size > 6 * 1024 * 1024) {
+        Alert.alert("File too large", "Please choose a file under 6MB.");
+        return;
+      }
+
+      // Read file → base64
+      let base64 = "";
+      try {
+        const resp = await fetch(asset.uri);
+        const blob = await resp.blob();
+        base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = reject;
+          reader.onload = () => {
+            const dataUrl = String(reader.result || "");
+            const idx = dataUrl.indexOf(",");
+            resolve(idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl);
+          };
+          reader.readAsDataURL(blob);
+        });
+      } catch (e) {
+        console.warn("doc read failed", e);
+        Alert.alert("Unable to attach", "Could not read file.");
+        return;
+      }
+
+      if (!base64) return;
+      setSending(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      try {
+        const msg = await apiFetch<Message>(`/api/conversations/${id}/messages`, {
+          method: "POST",
+          token,
+          body: {
+            type: "document",
+            media_base64: base64,
+            media_mime: asset.mimeType || "application/octet-stream",
+            filename: asset.name || "file",
+            filesize: size,
+          },
+        });
+        setMessages((prev) =>
+          prev.some((m) => m.message_id === msg.message_id) ? prev : [...prev, msg],
+        );
+      } catch (e: any) {
+        Alert.alert("Failed to send", e?.message || "Please try again.");
+      } finally {
+        setSending(false);
+      }
+    } catch (e) {
+      console.warn("document pick failed", e);
+    }
+  };
+
   const renderItem = ({ item, index }: { item: Message; index: number }) => {
     const mine = item.sender_id === user?.user_id;
     const bubbleStyle = [
@@ -318,10 +400,32 @@ export default function ChatDetailScreen() {
               style={styles.media}
               resizeMode="cover"
             />
-          ) : (
+          ) : item.type === "video" ? (
             <View style={styles.videoPlaceholder}>
               <Ionicons name="videocam" size={28} color={colors.onSurface} />
               <Text style={styles.videoLabel}>Video</Text>
+            </View>
+          ) : (
+            <View style={styles.documentCard}>
+              <View style={styles.documentIconWrap}>
+                <Ionicons name="document-text" size={22} color={mine ? colors.onBrandPrimary : colors.brandPrimary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.documentName, { color: mine ? colors.onBrandPrimary : colors.onSurface }]}
+                >
+                  {item.filename || "File"}
+                </Text>
+                <Text
+                  style={[
+                    styles.documentMeta,
+                    { color: mine ? "rgba(255,255,255,0.85)" : colors.onSurfaceTertiary },
+                  ]}
+                >
+                  {formatFileSize(item.filesize)}
+                </Text>
+              </View>
             </View>
           )}
           <View style={styles.metaRow}>
@@ -352,7 +456,8 @@ export default function ChatDetailScreen() {
   const peerInitial = (peer_name || "?").trim().charAt(0).toUpperCase();
 
   return (
-    <SafeAreaView testID="chat-detail-screen" edges={["top"]} style={styles.container}>
+    <PandaBackground>
+      <SafeAreaView testID="chat-detail-screen" edges={["top"]} style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
           testID="chat-back-button"
@@ -434,12 +539,12 @@ export default function ChatDetailScreen() {
         >
           <TouchableOpacity
             testID="attach-media-button"
-            onPress={pickMedia}
+            onPress={() => setAttachSheetOpen(true)}
             disabled={sending}
             style={styles.attachBtn}
             activeOpacity={0.7}
           >
-            <Ionicons name="image-outline" size={22} color={colors.brandPrimary} />
+            <Ionicons name="add" size={22} color={colors.brandPrimary} />
           </TouchableOpacity>
           <TextInput
             testID="message-input"
@@ -470,7 +575,66 @@ export default function ChatDetailScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Attachment sheet */}
+      <Modal
+        visible={attachSheetOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAttachSheetOpen(false)}
+      >
+        <TouchableOpacity
+          testID="attach-sheet-backdrop"
+          style={styles.sheetBackdrop}
+          activeOpacity={1}
+          onPress={() => setAttachSheetOpen(false)}
+        >
+          <View style={styles.sheet} onStartShouldSetResponder={() => true}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Share something</Text>
+            <TouchableOpacity
+              testID="attach-option-photo"
+              activeOpacity={0.75}
+              style={styles.sheetOption}
+              onPress={pickMedia}
+            >
+              <View style={[styles.sheetIconTile, { backgroundColor: colors.brandTertiary }]}>
+                <Ionicons name="image" size={22} color={colors.brandPrimary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetOptionTitle}>Photo or Video</Text>
+                <Text style={styles.sheetOptionSubtitle}>Pick from your gallery</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceTertiary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="attach-option-document"
+              activeOpacity={0.75}
+              style={styles.sheetOption}
+              onPress={pickDocument}
+            >
+              <View style={[styles.sheetIconTile, { backgroundColor: colors.brandTertiary }]}>
+                <Ionicons name="document-text" size={22} color={colors.brandPrimary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetOptionTitle}>Document</Text>
+                <Text style={styles.sheetOptionSubtitle}>PDF, docs, and other files</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceTertiary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              testID="attach-sheet-cancel"
+              onPress={() => setAttachSheetOpen(false)}
+              style={styles.sheetCancel}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.sheetCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
+    </PandaBackground>
   );
 }
 
@@ -478,7 +642,7 @@ const makeStyles = (colors: Palette) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: colors.surface,
+      backgroundColor: "transparent",
     },
     header: {
       flexDirection: "row",
@@ -599,6 +763,93 @@ const makeStyles = (colors: Palette) =>
       fontSize: typography.base,
       color: colors.onSurface,
       fontWeight: "600",
+    },
+    documentCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      minWidth: 220,
+    },
+    documentIconWrap: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: "rgba(255,255,255,0.2)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    documentName: {
+      fontSize: typography.lg,
+      fontWeight: "700",
+    },
+    documentMeta: {
+      marginTop: 2,
+      fontSize: typography.sm,
+    },
+    sheetBackdrop: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: "flex-end",
+    },
+    sheet: {
+      backgroundColor: colors.surface,
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.xl,
+      borderTopLeftRadius: radius.xl,
+      borderTopRightRadius: radius.xl,
+      gap: spacing.sm,
+    },
+    sheetHandle: {
+      alignSelf: "center",
+      width: 40,
+      height: 4,
+      borderRadius: 2,
+      backgroundColor: colors.borderStrong,
+      marginBottom: spacing.md,
+    },
+    sheetTitle: {
+      fontSize: typography.xl,
+      fontWeight: "700",
+      color: colors.onSurface,
+      marginBottom: spacing.sm,
+    },
+    sheetOption: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.md,
+      padding: spacing.md,
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: radius.md,
+    },
+    sheetIconTile: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    sheetOptionTitle: {
+      fontSize: typography.lg,
+      fontWeight: "600",
+      color: colors.onSurface,
+    },
+    sheetOptionSubtitle: {
+      marginTop: 2,
+      fontSize: typography.sm,
+      color: colors.onSurfaceTertiary,
+    },
+    sheetCancel: {
+      marginTop: spacing.md,
+      padding: spacing.md,
+      borderRadius: radius.pill,
+      backgroundColor: colors.surfaceSecondary,
+      alignItems: "center",
+    },
+    sheetCancelText: {
+      fontSize: typography.lg,
+      fontWeight: "700",
+      color: colors.onSurface,
     },
     typingBubble: {
       flexDirection: "row",
