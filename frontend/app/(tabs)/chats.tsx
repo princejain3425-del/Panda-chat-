@@ -35,10 +35,12 @@ function Avatar({
   user,
   size = 52,
   colors,
+  online,
 }: {
   user: { name: string; display_name?: string | null; picture?: string | null };
   size?: number;
   colors: Palette;
+  online?: boolean;
 }) {
   const label = (user.display_name || user.name || "?").trim();
   const initial = label.charAt(0).toUpperCase();
@@ -48,10 +50,10 @@ function Avatar({
     borderRadius: size / 2,
     backgroundColor: colors.brandTertiary,
   };
-  if (user.picture) {
-    return <Image source={{ uri: user.picture }} style={style} />;
-  }
-  return (
+  const dotSize = Math.max(10, Math.round(size * 0.24));
+  const inner = user.picture ? (
+    <Image source={{ uri: user.picture }} style={style} />
+  ) : (
     <View style={[style, { alignItems: "center", justifyContent: "center" }]}>
       <Text
         style={{
@@ -62,6 +64,26 @@ function Avatar({
       >
         {initial}
       </Text>
+    </View>
+  );
+  return (
+    <View style={{ width: size, height: size }}>
+      {inner}
+      {online ? (
+        <View
+          style={{
+            position: "absolute",
+            right: 0,
+            bottom: 0,
+            width: dotSize,
+            height: dotSize,
+            borderRadius: dotSize / 2,
+            backgroundColor: "#22C55E",
+            borderWidth: 2,
+            borderColor: colors.surface,
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -76,6 +98,7 @@ export default function ChatsScreen() {
   const [conversations, setConversations] = useState<ConversationView[]>([]);
   const [discover, setDiscover] = useState<User[]>([]);
   const [typingMap, setTypingMap] = useState<Record<string, boolean>>({});
+  const [presenceMap, setPresenceMap] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -88,6 +111,16 @@ export default function ChatsScreen() {
       ]);
       setConversations(convos);
       setDiscover(discovered);
+      // Fetch initial presence for all peers
+      const peerIds = convos.map((c) => c.peer.user_id);
+      if (peerIds.length > 0) {
+        apiFetch<Record<string, boolean>>(
+          `/api/presence?ids=${peerIds.join(",")}`,
+          { token },
+        )
+          .then((map) => setPresenceMap((prev) => ({ ...prev, ...map })))
+          .catch(() => {});
+      }
     } catch (e) {
       console.warn("Failed to load conversations", e);
     } finally {
@@ -145,6 +178,10 @@ export default function ChatsScreen() {
               ...prev,
               [conversation_id]: !!is_typing,
             }));
+          } else if (parsed.event === "presence") {
+            const { user_id, is_online } = parsed.data || {};
+            if (!user_id) return;
+            setPresenceMap((prev) => ({ ...prev, [user_id]: !!is_online }));
           }
         } catch {}
       };
@@ -224,7 +261,7 @@ export default function ChatsScreen() {
               onPress={() => startDiscoverChat(u)}
               style={styles.discoverCard}
             >
-              <Avatar user={u} size={56} colors={colors} />
+              <Avatar user={u} size={56} colors={colors} online={presenceMap[u.user_id]} />
               <Text numberOfLines={1} style={styles.discoverName}>
                 {(u.display_name || u.name).split(" ")[0]}
               </Text>
@@ -304,7 +341,7 @@ export default function ChatsScreen() {
                 activeOpacity={0.7}
                 onPress={() => openChat(item.peer, item.conversation_id)}
               >
-                <Avatar user={item.peer} colors={colors} />
+                <Avatar user={item.peer} colors={colors} online={presenceMap[item.peer.user_id]} />
                 <View style={styles.rowMain}>
                   <View style={styles.rowTopLine}>
                     <Text style={styles.name} numberOfLines={1}>

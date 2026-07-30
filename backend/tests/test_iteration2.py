@@ -289,6 +289,18 @@ async def test_ws_typing_broadcast_to_peer_only(user_alice, user_bob, api, base_
         assert json.loads(await asyncio.wait_for(a_ws.recv(), timeout=5)).get("event") == "connected"
         assert json.loads(await asyncio.wait_for(b_ws.recv(), timeout=5)).get("event") == "connected"
 
+        # Drain any presence events (Bob and Alice share a conversation)
+        async def _drain_presence(ws):
+            while True:
+                try:
+                    m = json.loads(await asyncio.wait_for(ws.recv(), timeout=1.0))
+                    if m.get("event") != "presence":
+                        return m
+                except asyncio.TimeoutError:
+                    return None
+        await _drain_presence(a_ws)
+        await _drain_presence(b_ws)
+
         # Alice signals typing
         await a_ws.send(json.dumps({
             "event": "typing",
@@ -305,8 +317,11 @@ async def test_ws_typing_broadcast_to_peer_only(user_alice, user_bob, api, base_
 
         # Alice must NOT receive her own typing echo
         try:
-            echo = await asyncio.wait_for(a_ws.recv(), timeout=1.5)
-            pytest.fail(f"Alice received unexpected echo: {echo}")
+            while True:
+                echo = json.loads(await asyncio.wait_for(a_ws.recv(), timeout=1.5))
+                if echo.get("event") == "presence":
+                    continue  # ignore presence events (peer connect/disconnect)
+                pytest.fail(f"Alice received unexpected echo: {echo}")
         except asyncio.TimeoutError:
             pass  # expected
 
@@ -316,7 +331,11 @@ async def test_ws_typing_broadcast_to_peer_only(user_alice, user_bob, api, base_
             "conversation_id": cid,
             "is_typing": False,
         }))
-        evt2 = json.loads(await asyncio.wait_for(b_ws.recv(), timeout=5))
+        # skip any presence noise on Bob's socket
+        while True:
+            evt2 = json.loads(await asyncio.wait_for(b_ws.recv(), timeout=5))
+            if evt2.get("event") != "presence":
+                break
         assert evt2["data"]["is_typing"] is False
 
 
@@ -342,10 +361,13 @@ async def test_ws_typing_non_participant_no_broadcast(user_alice, user_bob, user
             "is_typing": True,
         }))
 
-        # Neither Alice nor Bob should get any typing event
+        # Neither Alice nor Bob should get any typing event (presence events are OK — they share a convo)
         for ws, name in ((a_ws, "alice"), (b_ws, "bob")):
             try:
-                leaked = await asyncio.wait_for(ws.recv(), timeout=1.5)
-                pytest.fail(f"{name} received unexpected event from non-participant typing: {leaked}")
+                while True:
+                    leaked = json.loads(await asyncio.wait_for(ws.recv(), timeout=1.5))
+                    if leaked.get("event") == "presence":
+                        continue  # presence for the other peer is expected
+                    pytest.fail(f"{name} received unexpected event from non-participant typing: {leaked}")
             except asyncio.TimeoutError:
                 pass  # expected — no broadcast

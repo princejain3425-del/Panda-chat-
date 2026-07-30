@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 5 backend testing complete for Panda Chat presence feature. All 92 tests pass — 80 regression + 12 new iter-5 presence tests. New coverage in test_iteration5.py: (1) GET /api/presence auth (401 without Bearer). (2) Empty ids param + missing ids param → {}. (3) Unknown/ghost ids → {id: false}. (4) Offline known user → false. (5) Bulk lookup of alice/bob/charlie/ghost returns all keys with correct booleans. (6) REST /api/presence reflects live WS state: false → true on connect → false after close, with brief settle delays. (7) WS peer connect broadcasts presence:true to users sharing a conversation. (8) Source user does NOT receive their own presence event. (9) User without shared conversation (Charlie) does NOT receive Bob's presence. (10) WS disconnect broadcasts presence:false to peers. (11) Two concurrent WS for same user: closing one keeps user online (no offline emit + REST still true); closing last emits presence:false + REST returns false. Regression fixes: test_iteration2.py's two typing-WS tests (test_ws_typing_broadcast_to_peer_only, test_ws_typing_non_participant_no_broadcast) were updated to drain/ignore the new legitimate presence events between shared-conversation peers before asserting typing semantics — pure test-side accommodation, no server logic changed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_api.py",
+    "/app/backend/tests/test_iteration2.py",
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/test_iteration4.py",
+    "/app/backend/tests/test_iteration5.py",
+    "/app/backend/tests/test_ws.py",
+    "/app/backend/tests/pytest.ini",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py WSManager tracks connections as Dict[user_id, List[WebSocket]]. connect() returns first=True only on the first socket for a user; disconnect() returns True only when the last socket is removed. broadcast_presence() is called only on first-connect and last-disconnect — correct semantics for multi-tab scenarios. Verified via test_ws_two_concurrent_connections_partial_close_stays_online.",
+    "broadcast_presence() correctly excludes the source user_id from the peer set (line 590: `if p != user_id`). Verified.",
+    "broadcast_presence() peer discovery uses conversation.participants — users must share a conversation. Verified via test_ws_presence_no_broadcast_to_non_peer (Charlie doesn't receive Bob's presence).",
+    "/api/presence endpoint uses ws_manager.is_online() which checks in-memory connection state — bound to a single server instance. In a multi-replica deployment this needs a shared store (Redis pub/sub or similar). Non-blocking for MVP.",
+    "GET /api/presence returns a bare dict (not a Pydantic model). Missing/unknown ids fall through to `ws_manager.is_online(uid)` which returns False without erroring. Correct per spec.",
+    "The empty-string ids case is safely handled by the list comprehension filtering out blanks (`if i.strip()`), so `?ids=` yields {}. Verified.",
+    "WSManager stores List[WebSocket] but the type hint comment says 'set of websockets' (line 540). Cosmetic inconsistency; using list.remove is fine here. Non-blocking.",
+    "server.py still uses deprecated @app.on_event startup/shutdown handlers (carried over from earlier iterations). Non-blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration5.py (new — 12 tests: TestPresenceEndpoint class with 6 REST tests + 6 module-level async WS tests)",
+    "/app/backend/tests/test_iteration2.py (updated 2 WS-typing tests to drain presence events — pure test accommodation for new legit behavior; no server logic changes)"
+  ],
+  "success_rate": {"backend": "100% (92/92)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "Reused conftest.py fixtures (user_alice/user_bob/user_charlie). Each iter-5 test opens fresh WS connections + a fresh 1:1 conversation; conversations + messages are cleaned up by the alice fixture teardown. WS sockets are closed via async context managers.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Suite is at 92 tests. Run: `cd /app && python -m pytest backend/tests/ -v --junitxml=/app/test_reports/pytest/pytest_results.xml`. New in iter-5: presence coverage in test_iteration5.py — includes REST (/api/presence bulk lookup) + WS presence broadcast semantics (connect/disconnect/two-tabs/no-peer/no-self-echo/live-reflection). Note: any future WS tests where two users share a conversation and both come online must be prepared to receive presence:true events on top of connected/message events — see helpers `_wait_for_event` and inline drain loops in test_iteration5.py and test_iteration2.py as reference patterns.",
+  "rca_of_issue": "Two pre-existing test_iteration2.py WS-typing tests initially failed after the presence feature was added — root cause: those tests asserted 'no unexpected events' on sockets while two users sharing a conversation were both online, so the new (correct) presence:true broadcast was being flagged as an unexpected echo. Fix: drain/ignore presence-typed events in those two assertions. No backend code change required."
+}

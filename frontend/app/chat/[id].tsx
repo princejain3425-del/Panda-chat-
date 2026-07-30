@@ -49,7 +49,7 @@ function formatFileSize(bytes?: number | null): string {
 }
 
 export default function ChatDetailScreen() {
-  const { id, peer_name, peer_picture, peer_username } = useLocalSearchParams<{
+  const { id, peer_name, peer_picture, peer_username, peer_user_id } = useLocalSearchParams<{
     id: string;
     peer_name?: string;
     peer_picture?: string;
@@ -67,6 +67,7 @@ export default function ChatDetailScreen() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [peerTyping, setPeerTyping] = useState(false);
+  const [peerOnline, setPeerOnline] = useState(false);
   const [attachSheetOpen, setAttachSheetOpen] = useState(false);
   const listRef = useRef<FlatList<Message>>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -96,6 +97,17 @@ export default function ChatDetailScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Fetch initial presence for peer
+  useEffect(() => {
+    if (!token || !peer_user_id) return;
+    apiFetch<Record<string, boolean>>(
+      `/api/presence?ids=${peer_user_id}`,
+      { token },
+    )
+      .then((map) => setPeerOnline(!!map[peer_user_id as string]))
+      .catch(() => {});
+  }, [token, peer_user_id]);
 
   // WebSocket
   useEffect(() => {
@@ -135,6 +147,11 @@ export default function ChatDetailScreen() {
             if (conversation_id !== id) return;
             if (user_id === user?.user_id) return;
             setPeerTyping(!!is_typing);
+          } else if (parsed.event === "presence") {
+            const { user_id, is_online } = parsed.data || {};
+            if (user_id && user_id === peer_user_id) {
+              setPeerOnline(!!is_online);
+            }
           }
         } catch {}
       };
@@ -145,7 +162,7 @@ export default function ChatDetailScreen() {
       try { ws?.close(); } catch {}
       wsRef.current = null;
     };
-  }, [token, id, user?.user_id, markRead]);
+  }, [token, id, user?.user_id, peer_user_id, markRead]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -467,18 +484,33 @@ export default function ChatDetailScreen() {
           <Ionicons name="chevron-back" size={26} color={colors.onSurface} />
         </TouchableOpacity>
         {peer_picture ? (
-          <Image source={{ uri: peer_picture }} style={styles.headerAvatar} />
+          <View style={styles.headerAvatarWrap}>
+            <Image source={{ uri: peer_picture }} style={styles.headerAvatar} />
+            {peerOnline && <View style={styles.presenceDot} />}
+          </View>
         ) : (
-          <View style={[styles.headerAvatar, styles.headerAvatarFallback]}>
-            <Text style={styles.headerAvatarText}>{peerInitial}</Text>
+          <View style={styles.headerAvatarWrap}>
+            <View style={[styles.headerAvatar, styles.headerAvatarFallback]}>
+              <Text style={styles.headerAvatarText}>{peerInitial}</Text>
+            </View>
+            {peerOnline && <View style={styles.presenceDot} />}
           </View>
         )}
         <View style={{ flex: 1 }}>
           <Text testID="chat-peer-name" style={styles.headerName} numberOfLines={1}>
             {peer_name || "Chat"}
           </Text>
-          <Text testID="chat-peer-status" style={styles.headerStatus}>
-            {peerTyping ? "typing…" : peer_username ? `@${peer_username}` : "Active now"}
+          <Text
+            testID="chat-peer-status"
+            style={[styles.headerStatus, !peerTyping && !peerOnline && styles.headerStatusOffline]}
+          >
+            {peerTyping
+              ? "typing…"
+              : peerOnline
+                ? "Online"
+                : peer_username
+                  ? `@${peer_username}`
+                  : "Offline"}
           </Text>
         </View>
       </View>
@@ -660,11 +692,27 @@ const makeStyles = (colors: Palette) =>
       alignItems: "center",
       justifyContent: "center",
     },
+    headerAvatarWrap: {
+      width: 38,
+      height: 38,
+      position: "relative",
+    },
     headerAvatar: {
       width: 38,
       height: 38,
       borderRadius: 19,
       backgroundColor: colors.brandTertiary,
+    },
+    presenceDot: {
+      position: "absolute",
+      right: -2,
+      bottom: -2,
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      backgroundColor: "#22C55E",
+      borderWidth: 2,
+      borderColor: colors.surface,
     },
     headerAvatarFallback: {
       alignItems: "center",
@@ -684,6 +732,9 @@ const makeStyles = (colors: Palette) =>
       fontSize: typography.sm,
       color: colors.brandPrimary,
       fontWeight: "600",
+    },
+    headerStatusOffline: {
+      color: colors.onSurfaceTertiary,
     },
     loadingWrap: {
       flex: 1,

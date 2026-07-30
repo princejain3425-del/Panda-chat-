@@ -540,11 +540,20 @@ class WSManager:
         # user_id -> set of websockets
         self.connections: Dict[str, List[WebSocket]] = {}
 
+    def is_online(self, user_id: str) -> bool:
+        return user_id in self.connections and len(self.connections[user_id]) > 0
+
+    def online_users(self) -> List[str]:
+        return list(self.connections.keys())
+
     async def connect(self, user_id: str, ws: WebSocket):
         await ws.accept()
+        first = user_id not in self.connections
         self.connections.setdefault(user_id, []).append(ws)
+        return first  # True if this is the first ws for this user
 
-    def disconnect(self, user_id: str, ws: WebSocket):
+    def disconnect(self, user_id: str, ws: WebSocket) -> bool:
+        """Return True if the user has NO more connections after this disconnect."""
         if user_id in self.connections:
             try:
                 self.connections[user_id].remove(ws)
@@ -552,6 +561,8 @@ class WSManager:
                 pass
             if not self.connections[user_id]:
                 del self.connections[user_id]
+                return True
+        return False
 
     async def send_to_user(self, user_id: str, message: dict):
         for ws in list(self.connections.get(user_id, [])):
@@ -568,15 +579,44 @@ class WSManager:
 ws_manager = WSManager()
 
 
+async def broadcast_presence(user_id: str, is_online: bool):
+    """Notify all users who share a conversation with this user."""
+    peers: set = set()
+    async for c in db.conversations.find(
+        {"participants": user_id}, {"_id": 0, "participants": 1}
+    ):
+        for p in c.get("participants", []):
+            if p != user_id:
+                peers.add(p)
+    payload = {
+        "event": "presence",
+        "data": {"user_id": user_id, "is_online": is_online},
+    }
+    for peer_id in peers:
+        await ws_manager.send_to_user(peer_id, payload)
+
+
+@api_router.get("/presence")
+async def get_presence(
+    ids: str = Query(""),
+    authorization: Optional[str] = Header(None),
+):
+    """Return {user_id: is_online} for the requested comma-separated ids."""
+    await get_current_user(authorization)
+    id_list = [i.strip() for i in ids.split(",") if i.strip()]
+    return {uid: ws_manager.is_online(uid) for uid in id_list}
+
+
 @app.websocket("/api/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
     user = await get_user_by_token(token)
     if not user:
         await websocket.close(code=4401)
         return
-    await ws_manager.connect(user.user_id, websocket)
+    first = await ws_manager.connect(user.user_id, websocket)
+    if first:
+        await broadcast_presence(user.user_id, True)
     try:
-        # Send hello
         await websocket.send_json({"event": "connected", "user_id": user.user_id})
         while True:
             data = await websocket.receive_text()
@@ -596,7 +636,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
                     )
                     if not convo:
                         continue
-                    # Broadcast to peers only (not back to sender)
                     for uid in convo["participants"]:
                         if uid == user.user_id:
                             continue
@@ -611,9 +650,13 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
             except Exception:
                 pass
     except WebSocketDisconnect:
-        ws_manager.disconnect(user.user_id, websocket)
+        last = ws_manager.disconnect(user.user_id, websocket)
+        if last:
+            await broadcast_presence(user.user_id, False)
     except Exception:
-        ws_manager.disconnect(user.user_id, websocket)
+        last = ws_manager.disconnect(user.user_id, websocket)
+        if last:
+            await broadcast_presence(user.user_id, False)
 
 
 # ---------- Health ----------
