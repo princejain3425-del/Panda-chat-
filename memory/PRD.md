@@ -5,10 +5,11 @@ Omega Chat (formerly SageChat) is a modern, playful mobile chat app with a **whi
 
 ## Core Features
 - **Google Sign-In** via Emergent-managed OAuth.
+- **Onboarding — Pick your handle** — after first Google sign-in, user chooses a **display name** and a **unique @username** (3–20 chars, `[a-z0-9_]`, one-per-user, reserved names blocked). Live availability check as they type.
 - **Chat List** — pull-to-refresh, unread badges, live typing preview, and a horizontal **"People you may know"** row of recent users.
 - **1-on-1 Messaging** — real-time over WebSocket, sent/received bubbles with timestamps, **read receipts** (✓ / ✓✓ + "Read" label), and **live typing indicator** ("typing…" + animated dots in-thread).
 - **Media Sharing** — photos & videos from gallery stored as base64.
-- **User Search** — by name/email.
+- **User Search** — by name, display name, email, or `@username` (prefix match).
 - **Profile & Settings** — theme selector (System / Light / Dark), sign out.
 - **Dark Mode** — full palette with pink accents; toggled per-user and persisted in local storage.
 
@@ -24,6 +25,7 @@ Omega Chat (formerly SageChat) is a modern, playful mobile chat app with a **whi
 
 ## API Endpoints
 - `POST /api/auth/session`, `GET /api/auth/me`, `POST /api/auth/logout`
+- `GET /api/auth/username-available?u=`, `POST /api/auth/complete-profile`
 - `GET /api/users/search?q=`, `GET /api/users/discover`
 - `GET /api/conversations`, `POST /api/conversations`
 - `GET /api/conversations/{id}/messages`, `POST /api/conversations/{id}/messages`
