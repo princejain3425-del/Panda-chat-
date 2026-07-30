@@ -13,6 +13,7 @@ export type ConversationView = {
   last_message_type?: string | null;
   last_sender_id?: string | null;
   updated_at: string;
+  unread_count: number;
 };
 
 export type Message = {
@@ -24,4 +25,5 @@ export type Message = {
   media_base64?: string | null;
   media_mime?: string | null;
   created_at: string;
+  read_at?: string | null;
 };

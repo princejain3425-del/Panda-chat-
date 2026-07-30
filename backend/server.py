@@ -87,6 +87,7 @@ class ConversationView(BaseModel):
     last_message_type: Optional[str] = None
     last_sender_id: Optional[str] = None
     updated_at: datetime
+    unread_count: int = 0
 
 
 class MessageCreate(BaseModel):
@@ -105,6 +106,7 @@ class Message(BaseModel):
     media_base64: Optional[str] = None
     media_mime: Optional[str] = None
     created_at: datetime
+    read_at: Optional[datetime] = None
 
 
 # ---------- Auth helpers ----------
@@ -222,6 +224,25 @@ async def search_users(
     return [User(**u) for u in users]
 
 
+@api_router.get("/users/discover", response_model=List[User])
+async def discover_users(authorization: Optional[str] = Header(None)):
+    """People-you-may-know: newest users the current user hasn't chatted with yet."""
+    me = await get_current_user(authorization)
+    # Collect peer ids from existing conversations
+    existing = db.conversations.find(
+        {"participants": me.user_id}, {"_id": 0, "participants": 1}
+    )
+    known_ids = {me.user_id}
+    async for c in existing:
+        for p in c.get("participants", []):
+            known_ids.add(p)
+    cursor = db.users.find(
+        {"user_id": {"$nin": list(known_ids)}}, {"_id": 0}
+    ).sort("created_at", -1).limit(12)
+    users = await cursor.to_list(12)
+    return [User(**u) for u in users]
+
+
 # ---------- Conversations ----------
 
 async def build_conversation_view(convo: dict, me_id: str) -> Optional[ConversationView]:
@@ -231,6 +252,11 @@ async def build_conversation_view(convo: dict, me_id: str) -> Optional[Conversat
     peer_doc = await db.users.find_one({"user_id": peer_id}, {"_id": 0})
     if not peer_doc:
         return None
+    unread_count = await db.messages.count_documents({
+        "conversation_id": convo["conversation_id"],
+        "sender_id": {"$ne": me_id},
+        "read_at": None,
+    })
     return ConversationView(
         conversation_id=convo["conversation_id"],
         peer=User(**peer_doc),
@@ -238,6 +264,7 @@ async def build_conversation_view(convo: dict, me_id: str) -> Optional[Conversat
         last_message_type=convo.get("last_message_type"),
         last_sender_id=convo.get("last_sender_id"),
         updated_at=convo["updated_at"],
+        unread_count=unread_count,
     )
 
 
@@ -347,6 +374,7 @@ async def send_message(
         "media_base64": payload.media_base64,
         "media_mime": payload.media_mime,
         "created_at": now_utc(),
+        "read_at": None,
     }
     await db.messages.insert_one(msg_doc)
     msg_doc.pop("_id", None)
@@ -369,6 +397,44 @@ async def send_message(
         participants=convo["participants"],
     )
     return message
+
+
+@api_router.post("/conversations/{conversation_id}/read")
+async def mark_conversation_read(
+    conversation_id: str,
+    authorization: Optional[str] = Header(None),
+):
+    me = await get_current_user(authorization)
+    convo = await db.conversations.find_one(
+        {"conversation_id": conversation_id, "participants": me.user_id},
+        {"_id": 0},
+    )
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    read_at = now_utc()
+    result = await db.messages.update_many(
+        {
+            "conversation_id": conversation_id,
+            "sender_id": {"$ne": me.user_id},
+            "read_at": None,
+        },
+        {"$set": {"read_at": read_at}},
+    )
+    if result.modified_count > 0:
+        # Broadcast read event so sender's UI can update ticks
+        await ws_manager.broadcast_to_conversation(
+            conversation_id,
+            {
+                "event": "read",
+                "data": {
+                    "conversation_id": conversation_id,
+                    "reader_id": me.user_id,
+                    "read_at": read_at.isoformat(),
+                },
+            },
+            participants=convo["participants"],
+        )
+    return {"ok": True, "updated": result.modified_count}
 
 
 # ---------- WebSocket Manager ----------
@@ -417,12 +483,35 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
         # Send hello
         await websocket.send_json({"event": "connected", "user_id": user.user_id})
         while True:
-            # Keep connection alive; accept pings from client
             data = await websocket.receive_text()
             try:
                 payload = json.loads(data)
-                if payload.get("event") == "ping":
+                event = payload.get("event")
+                if event == "ping":
                     await websocket.send_json({"event": "pong"})
+                elif event == "typing":
+                    convo_id = payload.get("conversation_id")
+                    is_typing = bool(payload.get("is_typing"))
+                    if not convo_id:
+                        continue
+                    convo = await db.conversations.find_one(
+                        {"conversation_id": convo_id, "participants": user.user_id},
+                        {"_id": 0, "participants": 1},
+                    )
+                    if not convo:
+                        continue
+                    # Broadcast to peers only (not back to sender)
+                    for uid in convo["participants"]:
+                        if uid == user.user_id:
+                            continue
+                        await ws_manager.send_to_user(uid, {
+                            "event": "typing",
+                            "data": {
+                                "conversation_id": convo_id,
+                                "user_id": user.user_id,
+                                "is_typing": is_typing,
+                            },
+                        })
             except Exception:
                 pass
     except WebSocketDisconnect:

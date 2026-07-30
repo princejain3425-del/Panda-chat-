@@ -1,9 +1,11 @@
+import { useMemo } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Image,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,20 +13,25 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 
 import { useAuth } from "@/src/auth-context";
-import { colors, spacing, radius, typography } from "@/src/theme";
+import { useTheme } from "@/src/theme-context";
+import { Palette, radius, spacing, typography, ThemeMode } from "@/src/theme";
 
-function Row({
+function SettingRow({
   icon,
   label,
   onPress,
+  colors,
   destructive,
   testID,
+  right,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress?: () => void;
+  colors: Palette;
   destructive?: boolean;
   testID?: string;
+  right?: React.ReactNode;
 }) {
   return (
     <TouchableOpacity
@@ -33,17 +40,29 @@ function Row({
       onPress={onPress}
       style={styles.row}
     >
-      <View style={[styles.iconTile, destructive && styles.iconTileDanger]}>
+      <View
+        style={[
+          styles.iconTile,
+          { backgroundColor: destructive ? colors.error : colors.brandTertiary },
+        ]}
+      >
         <Ionicons
           name={icon}
           size={18}
           color={destructive ? colors.onError : colors.brandPrimary}
         />
       </View>
-      <Text style={[styles.rowLabel, destructive && { color: colors.error }]}>
+      <Text
+        style={[
+          styles.rowLabel,
+          { color: destructive ? colors.error : colors.onSurface },
+        ]}
+      >
         {label}
       </Text>
-      <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceTertiary} />
+      {right ?? (
+        <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceTertiary} />
+      )}
     </TouchableOpacity>
   );
 }
@@ -52,6 +71,8 @@ export default function ProfileScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { colors, mode, setMode } = useTheme();
+  const themed = useMemo(() => makeStyles(colors), [colors]);
 
   const handleSignOut = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -61,100 +82,106 @@ export default function ProfileScreen() {
 
   const initial = (user?.name || "?").trim().charAt(0).toUpperCase();
 
+  const modes: { key: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+    { key: "system", label: "System", icon: "phone-portrait-outline" },
+    { key: "light", label: "Light", icon: "sunny-outline" },
+    { key: "dark", label: "Dark", icon: "moon-outline" },
+  ];
+
   return (
-    <SafeAreaView testID="profile-screen" edges={["top"]} style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profile</Text>
-      </View>
+    <SafeAreaView testID="profile-screen" edges={["top"]} style={themed.container}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 120 + insets.bottom }}>
+        <View style={themed.header}>
+          <Text style={themed.headerTitle}>Profile</Text>
+        </View>
 
-      <View style={styles.profileCard}>
-        {user?.picture ? (
-          <Image source={{ uri: user.picture }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatar, styles.avatarFallback]}>
-            <Text style={styles.avatarText}>{initial}</Text>
-          </View>
-        )}
-        <Text testID="profile-name" style={styles.name}>{user?.name}</Text>
-        <Text testID="profile-email" style={styles.email}>{user?.email}</Text>
-      </View>
+        <View style={themed.profileCard}>
+          {user?.picture ? (
+            <Image source={{ uri: user.picture }} style={themed.avatar} />
+          ) : (
+            <View style={[themed.avatar, themed.avatarFallback]}>
+              <Text style={themed.avatarText}>{initial}</Text>
+            </View>
+          )}
+          <Text testID="profile-name" style={themed.name}>{user?.name}</Text>
+          <Text testID="profile-email" style={themed.email}>{user?.email}</Text>
+        </View>
 
-      <View style={[styles.list, { marginBottom: 90 + insets.bottom }]}>
-        <Row icon="notifications-outline" label="Notifications" testID="settings-notifications" />
-        <View style={styles.divider} />
-        <Row icon="lock-closed-outline" label="Privacy" testID="settings-privacy" />
-        <View style={styles.divider} />
-        <Row icon="help-circle-outline" label="Help & Support" testID="settings-help" />
-      </View>
+        {/* Theme selector */}
+        <Text style={themed.sectionLabel}>Appearance</Text>
+        <View style={themed.themeCard}>
+          {modes.map((m, i) => {
+            const active = mode === m.key;
+            return (
+              <TouchableOpacity
+                key={m.key}
+                testID={`theme-mode-${m.key}`}
+                activeOpacity={0.8}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setMode(m.key);
+                }}
+                style={[
+                  themed.themeOption,
+                  active && themed.themeOptionActive,
+                  i > 0 && themed.themeOptionDivider,
+                ]}
+              >
+                <View
+                  style={[
+                    themed.themeIconWrap,
+                    active && { backgroundColor: colors.brandPrimary },
+                  ]}
+                >
+                  <Ionicons
+                    name={m.icon}
+                    size={16}
+                    color={active ? colors.onBrandPrimary : colors.brandPrimary}
+                  />
+                </View>
+                <Text
+                  style={[
+                    themed.themeLabel,
+                    active && { color: colors.brandPrimary, fontWeight: "700" },
+                  ]}
+                >
+                  {m.label}
+                </Text>
+                {active && (
+                  <Ionicons name="checkmark-circle" size={20} color={colors.brandPrimary} />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-      <View style={{ paddingHorizontal: spacing.lg, marginBottom: 90 + insets.bottom }}>
-        <TouchableOpacity
-          testID="sign-out-button"
-          onPress={handleSignOut}
-          style={styles.signOutBtn}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="log-out-outline" size={18} color={colors.error} />
-          <Text style={styles.signOutText}>Sign out</Text>
-        </TouchableOpacity>
-      </View>
+        <Text style={themed.sectionLabel}>Settings</Text>
+        <View style={themed.list}>
+          <SettingRow icon="notifications-outline" label="Notifications" colors={colors} testID="settings-notifications" />
+          <View style={themed.divider} />
+          <SettingRow icon="lock-closed-outline" label="Privacy" colors={colors} testID="settings-privacy" />
+          <View style={themed.divider} />
+          <SettingRow icon="help-circle-outline" label="Help & Support" colors={colors} testID="settings-help" />
+        </View>
+
+        <View style={{ paddingHorizontal: spacing.lg, marginTop: spacing.lg }}>
+          <TouchableOpacity
+            testID="sign-out-button"
+            onPress={handleSignOut}
+            style={themed.signOutBtn}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="log-out-outline" size={18} color={colors.error} />
+            <Text style={themed.signOutText}>Sign out</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
+// Row styles that are safe to keep static (only used for structure)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.surface,
-  },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  headerTitle: {
-    fontSize: 30,
-    fontWeight: "700",
-    color: colors.onSurface,
-    letterSpacing: -0.5,
-  },
-  profileCard: {
-    alignItems: "center",
-    paddingVertical: spacing.xl,
-  },
-  avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: colors.brandTertiary,
-  },
-  avatarFallback: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    fontSize: 36,
-    fontWeight: "700",
-    color: colors.brandPrimary,
-  },
-  name: {
-    marginTop: spacing.md,
-    fontSize: typography.xxl,
-    fontWeight: "700",
-    color: colors.onSurface,
-  },
-  email: {
-    marginTop: spacing.xs,
-    fontSize: typography.base,
-    color: colors.onSurfaceSecondary,
-  },
-  list: {
-    marginTop: spacing.lg,
-    marginHorizontal: spacing.lg,
-    backgroundColor: colors.surfaceSecondary,
-    borderRadius: radius.lg,
-    overflow: "hidden",
-  },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -165,38 +192,131 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: colors.brandTertiary,
     alignItems: "center",
     justifyContent: "center",
-  },
-  iconTileDanger: {
-    backgroundColor: colors.error,
   },
   rowLabel: {
     flex: 1,
     fontSize: typography.lg,
-    color: colors.onSurface,
     fontWeight: "500",
   },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.divider,
-    marginLeft: spacing.md + 34 + spacing.md,
-  },
-  signOutBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.error,
-    backgroundColor: colors.surface,
-  },
-  signOutText: {
-    color: colors.error,
-    fontWeight: "600",
-    fontSize: typography.lg,
-  },
 });
+
+const makeStyles = (colors: Palette) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.surface,
+    },
+    header: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.sm,
+    },
+    headerTitle: {
+      fontSize: 32,
+      fontWeight: "800",
+      color: colors.onSurface,
+      letterSpacing: -0.6,
+    },
+    profileCard: {
+      alignItems: "center",
+      paddingVertical: spacing.xl,
+    },
+    avatar: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      backgroundColor: colors.brandTertiary,
+    },
+    avatarFallback: {
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    avatarText: {
+      fontSize: 38,
+      fontWeight: "700",
+      color: colors.brandPrimary,
+    },
+    name: {
+      marginTop: spacing.md,
+      fontSize: typography.xxl,
+      fontWeight: "700",
+      color: colors.onSurface,
+    },
+    email: {
+      marginTop: spacing.xs,
+      fontSize: typography.base,
+      color: colors.onSurfaceSecondary,
+    },
+    sectionLabel: {
+      marginTop: spacing.lg,
+      marginHorizontal: spacing.lg,
+      marginBottom: spacing.sm,
+      fontSize: typography.sm,
+      fontWeight: "700",
+      color: colors.onSurfaceTertiary,
+      letterSpacing: 1,
+      textTransform: "uppercase",
+    },
+    themeCard: {
+      marginHorizontal: spacing.lg,
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: radius.lg,
+      overflow: "hidden",
+    },
+    themeOption: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: spacing.md,
+      gap: spacing.md,
+    },
+    themeOptionActive: {
+      backgroundColor: colors.brandTertiary,
+    },
+    themeOptionDivider: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.divider,
+    },
+    themeIconWrap: {
+      width: 32,
+      height: 32,
+      borderRadius: 10,
+      backgroundColor: colors.brandTertiary,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    themeLabel: {
+      flex: 1,
+      fontSize: typography.lg,
+      fontWeight: "500",
+      color: colors.onSurface,
+    },
+    list: {
+      marginHorizontal: spacing.lg,
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: radius.lg,
+      overflow: "hidden",
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.divider,
+      marginLeft: spacing.md + 34 + spacing.md,
+    },
+    signOutBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: spacing.sm,
+      paddingVertical: spacing.md,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: colors.error,
+      backgroundColor: colors.surface,
+    },
+    signOutText: {
+      color: colors.error,
+      fontWeight: "700",
+      fontSize: typography.lg,
+    },
+  });

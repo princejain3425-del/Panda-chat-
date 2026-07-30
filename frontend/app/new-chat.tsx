@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -16,7 +16,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/src/auth-context";
 import { apiFetch } from "@/src/api";
 import { User, ConversationView } from "@/src/types";
-import { colors, spacing, radius, typography } from "@/src/theme";
+import { useTheme } from "@/src/theme-context";
+import { Palette, radius, spacing, typography } from "@/src/theme";
 
 export default function NewChatScreen() {
   const { token } = useAuth();
@@ -25,6 +26,8 @@ export default function NewChatScreen() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState<string | null>(null);
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const load = useCallback(
     async (q: string) => {
@@ -160,91 +163,92 @@ export default function NewChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.surface,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  headerBtn: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    fontSize: typography.xl,
-    fontWeight: "700",
-    color: colors.onSurface,
-  },
-  searchWrap: {
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.surfaceSecondary,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: typography.lg,
-    color: colors.onSurface,
-    paddingVertical: 0,
-  },
-  loadingWrap: { padding: spacing.xl, alignItems: "center" },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    gap: spacing.md,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.brandTertiary,
-  },
-  avatarFallback: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarText: {
-    fontWeight: "700",
-    color: colors.brandPrimary,
-    fontSize: typography.xl,
-  },
-  name: {
-    fontSize: typography.lg,
-    fontWeight: "600",
-    color: colors.onSurface,
-  },
-  email: {
-    marginTop: 2,
-    fontSize: typography.base,
-    color: colors.onSurfaceTertiary,
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.divider,
-    marginLeft: spacing.lg + 48 + spacing.md,
-  },
-  empty: {
-    marginTop: spacing.xxxl,
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  emptyText: {
-    color: colors.onSurfaceSecondary,
-    fontSize: typography.lg,
-  },
-});
+const makeStyles = (colors: Palette) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.surface,
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    headerBtn: {
+      width: 40,
+      height: 40,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    headerTitle: {
+      fontSize: typography.xl,
+      fontWeight: "700",
+      color: colors.onSurface,
+    },
+    searchWrap: {
+      marginHorizontal: spacing.lg,
+      marginBottom: spacing.sm,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      backgroundColor: colors.surfaceSecondary,
+      borderRadius: radius.pill,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: typography.lg,
+      color: colors.onSurface,
+      paddingVertical: 0,
+    },
+    loadingWrap: { padding: spacing.xl, alignItems: "center" },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      gap: spacing.md,
+    },
+    avatar: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: colors.brandTertiary,
+    },
+    avatarFallback: {
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    avatarText: {
+      fontWeight: "700",
+      color: colors.brandPrimary,
+      fontSize: typography.xl,
+    },
+    name: {
+      fontSize: typography.lg,
+      fontWeight: "600",
+      color: colors.onSurface,
+    },
+    email: {
+      marginTop: 2,
+      fontSize: typography.base,
+      color: colors.onSurfaceTertiary,
+    },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.divider,
+      marginLeft: spacing.lg + 48 + spacing.md,
+    },
+    empty: {
+      marginTop: spacing.xxxl,
+      alignItems: "center",
+      gap: spacing.sm,
+    },
+    emptyText: {
+      color: colors.onSurfaceSecondary,
+      fontSize: typography.lg,
+    },
+  });

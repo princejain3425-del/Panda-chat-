@@ -1,30 +1,80 @@
-// Theme tokens following the SageChat design guidelines.
-// Currently uses the "light" palette. Extend later for dark mode.
+// Omega Chat theme tokens — white + pink accents, light & dark modes.
 
-export const colors = {
-  surface: "#FDFBF7",
-  onSurface: "#1C1B1A",
-  surfaceSecondary: "#F2EFE9",
-  onSurfaceSecondary: "#4A4846",
-  surfaceTertiary: "#E6E2DA",
-  onSurfaceTertiary: "#716F6C",
-  surfaceInverse: "#1C1B1A",
-  onSurfaceInverse: "#FDFBF7",
-  brand: "#5B7454",
-  brandPrimary: "#5B7454",
+export type ThemeMode = "light" | "dark" | "system";
+
+export type Palette = {
+  surface: string;
+  onSurface: string;
+  surfaceSecondary: string;
+  onSurfaceSecondary: string;
+  surfaceTertiary: string;
+  onSurfaceTertiary: string;
+  surfaceInverse: string;
+  onSurfaceInverse: string;
+  brandPrimary: string;
+  onBrandPrimary: string;
+  brandSecondary: string;
+  onBrandSecondary: string;
+  brandTertiary: string;
+  onBrandTertiary: string;
+  success: string;
+  warning: string;
+  error: string;
+  onError: string;
+  border: string;
+  borderStrong: string;
+  divider: string;
+  overlay: string;
+};
+
+export const lightPalette: Palette = {
+  surface: "#FFFFFF",
+  onSurface: "#17161B",
+  surfaceSecondary: "#FBF6F8",
+  onSurfaceSecondary: "#4A4548",
+  surfaceTertiary: "#F5EBEF",
+  onSurfaceTertiary: "#7A6E74",
+  surfaceInverse: "#17161B",
+  onSurfaceInverse: "#FFFFFF",
+  brandPrimary: "#EC4899",
   onBrandPrimary: "#FFFFFF",
-  brandSecondary: "#7D9476",
+  brandSecondary: "#F472B6",
   onBrandSecondary: "#FFFFFF",
-  brandTertiary: "#D4E0D1",
-  onBrandTertiary: "#1C1B1A",
-  success: "#3C5C42",
-  onSuccess: "#FFFFFF",
-  warning: "#B88B42",
-  error: "#B5534A",
+  brandTertiary: "#FCE7F3",
+  onBrandTertiary: "#831843",
+  success: "#16A34A",
+  warning: "#D97706",
+  error: "#DC2626",
   onError: "#FFFFFF",
-  border: "#E6E2DA",
-  borderStrong: "#B8B2AA",
-  divider: "#EAE6E0",
+  border: "#EFE6EA",
+  borderStrong: "#D4CBCF",
+  divider: "#F3EBEE",
+  overlay: "rgba(23,22,27,0.5)",
+};
+
+export const darkPalette: Palette = {
+  surface: "#151317",
+  onSurface: "#FBF6F8",
+  surfaceSecondary: "#211D22",
+  onSurfaceSecondary: "#C4BABE",
+  surfaceTertiary: "#2C262C",
+  onSurfaceTertiary: "#8B8087",
+  surfaceInverse: "#FBF6F8",
+  onSurfaceInverse: "#151317",
+  brandPrimary: "#F472B6",
+  onBrandPrimary: "#151317",
+  brandSecondary: "#EC4899",
+  onBrandSecondary: "#FFFFFF",
+  brandTertiary: "#3A2530",
+  onBrandTertiary: "#FCE7F3",
+  success: "#4ADE80",
+  warning: "#FBBF24",
+  error: "#F87171",
+  onError: "#151317",
+  border: "#332C33",
+  borderStrong: "#504853",
+  divider: "#26212A",
+  overlay: "rgba(0,0,0,0.6)",
 };
 
 export const spacing = {
@@ -41,6 +91,7 @@ export const radius = {
   sm: 6,
   md: 12,
   lg: 20,
+  xl: 28,
   pill: 999,
 };
 
@@ -52,3 +103,5 @@ export const typography = {
   xxl: 24,
   display: 32,
 };
+
+export const APP_NAME = "Omega Chat";

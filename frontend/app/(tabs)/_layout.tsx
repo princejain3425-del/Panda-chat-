@@ -4,13 +4,16 @@ import { StyleSheet, View, Platform } from "react-native";
 import { BlurView } from "expo-blur";
 
 import { useAuth } from "@/src/auth-context";
-import { colors } from "@/src/theme";
+import { useTheme } from "@/src/theme-context";
 
 export default function TabsLayout() {
   const { user, loading } = useAuth();
+  const { colors, scheme } = useTheme();
 
   if (loading) return null;
   if (!user) return <Redirect href="/welcome" />;
+
+  const solidBg = scheme === "dark" ? "rgba(21,19,23,0.75)" : "rgba(255,255,255,0.75)";
 
   return (
     <Tabs
@@ -31,14 +34,14 @@ export default function TabsLayout() {
             ? undefined
             : () => (
                 <BlurView
-                  tint="light"
+                  tint={scheme === "dark" ? "dark" : "light"}
                   intensity={80}
                   style={StyleSheet.absoluteFill}
                 >
                   <View
                     style={[
                       StyleSheet.absoluteFill,
-                      { backgroundColor: "rgba(253,251,247,0.72)" },
+                      { backgroundColor: solidBg },
                     ]}
                   />
                 </BlurView>
