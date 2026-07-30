@@ -10,7 +10,11 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.chatmobileapp.rtzm5t"
+      "bundleIdentifier": "com.emergent.chatmobileapp.rtzm5t",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Share photos and videos in your chats",
+        "NSCameraUsageDescription": "Take photos to send in your chats"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +22,12 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.chatmobileapp.rtzm5t"
+      "package": "com.emergent.chatmobileapp.rtzm5t",
+      "permissions": [
+        "READ_EXTERNAL_STORAGE",
+        "READ_MEDIA_IMAGES",
+        "READ_MEDIA_VIDEO"
+      ]
     },
     "web": {
       "bundler": "metro",
