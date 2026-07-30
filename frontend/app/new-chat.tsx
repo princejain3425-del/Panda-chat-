@@ -64,7 +64,8 @@ export default function NewChatScreen() {
         pathname: "/chat/[id]",
         params: {
           id: convo.conversation_id,
-          peer_name: convo.peer.name,
+          peer_name: convo.peer.display_name || convo.peer.name,
+          peer_username: convo.peer.username || "",
           peer_picture: convo.peer.picture || "",
           peer_user_id: convo.peer.user_id,
         },
@@ -128,7 +129,8 @@ export default function NewChatScreen() {
             </View>
           }
           renderItem={({ item }) => {
-            const initial = (item.name || "?").charAt(0).toUpperCase();
+            const label = item.display_name || item.name;
+            const initial = (label || "?").charAt(0).toUpperCase();
             const isCreating = creating === item.user_id;
             return (
               <TouchableOpacity
@@ -146,8 +148,10 @@ export default function NewChatScreen() {
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{item.name}</Text>
-                  <Text style={styles.email}>{item.email}</Text>
+                  <Text style={styles.name}>{label}</Text>
+                  <Text style={styles.email}>
+                    {item.username ? `@${item.username}` : item.email}
+                  </Text>
                 </View>
                 {isCreating ? (
                   <ActivityIndicator color={colors.brandPrimary} />

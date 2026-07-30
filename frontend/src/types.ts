@@ -2,6 +2,8 @@ export type User = {
   user_id: string;
   email: string;
   name: string;
+  display_name?: string | null;
+  username?: string | null;
   picture?: string | null;
   created_at: string;
 };

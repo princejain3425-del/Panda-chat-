@@ -12,10 +12,12 @@ export default function Index() {
 
   useEffect(() => {
     if (loading) return;
-    if (user) {
-      router.replace("/(tabs)/chats");
-    } else {
+    if (!user) {
       router.replace("/welcome");
+    } else if (!user.username) {
+      router.replace("/complete-profile");
+    } else {
+      router.replace("/(tabs)/chats");
     }
   }, [loading, user, router]);
 

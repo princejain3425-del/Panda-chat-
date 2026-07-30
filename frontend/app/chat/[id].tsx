@@ -34,11 +34,12 @@ function formatTime(iso: string): string {
 }
 
 export default function ChatDetailScreen() {
-  const { id, peer_name, peer_picture } = useLocalSearchParams<{
+  const { id, peer_name, peer_picture, peer_username } = useLocalSearchParams<{
     id: string;
     peer_name?: string;
     peer_picture?: string;
     peer_user_id?: string;
+    peer_username?: string;
   }>();
   const router = useRouter();
   const { token, user } = useAuth();
@@ -372,7 +373,7 @@ export default function ChatDetailScreen() {
             {peer_name || "Chat"}
           </Text>
           <Text testID="chat-peer-status" style={styles.headerStatus}>
-            {peerTyping ? "typing…" : "Active now"}
+            {peerTyping ? "typing…" : peer_username ? `@${peer_username}` : "Active now"}
           </Text>
         </View>
       </View>

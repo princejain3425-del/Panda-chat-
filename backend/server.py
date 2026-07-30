@@ -47,18 +47,52 @@ def make_id(prefix: str = "id") -> str:
     return f"{prefix}_{uuid.uuid4().hex[:12]}"
 
 
+USERNAME_RE = __import__("re").compile(r"^[a-z0-9_]{3,20}$")
+RESERVED_USERNAMES = {
+    "admin", "administrator", "root", "system", "support", "help",
+    "omega", "omegachat", "me", "you", "user", "users", "api", "auth",
+    "search", "chat", "chats", "new", "official", "team",
+}
+
+
+def validate_username(u: str) -> str:
+    u = (u or "").strip().lower()
+    if not USERNAME_RE.match(u):
+        raise HTTPException(
+            status_code=400,
+            detail="Username must be 3–20 chars, lowercase letters, numbers or underscore.",
+        )
+    if u in RESERVED_USERNAMES:
+        raise HTTPException(status_code=400, detail="This username is reserved.")
+    return u
+
+
+def validate_display_name(n: str) -> str:
+    n = (n or "").strip()
+    if not (1 <= len(n) <= 40):
+        raise HTTPException(status_code=400, detail="Display name must be 1–40 characters.")
+    return n
+
+
 # ---------- Models ----------
 
 class User(BaseModel):
     user_id: str
     email: str
     name: str
+    display_name: Optional[str] = None
+    username: Optional[str] = None
     picture: Optional[str] = None
     created_at: datetime
 
 
 class SessionCreate(BaseModel):
     session_token: str
+
+
+class ProfileUpdate(BaseModel):
+    display_name: str
+    username: str
 
 
 class AuthResponse(BaseModel):
@@ -196,6 +230,48 @@ async def auth_me(authorization: Optional[str] = Header(None)):
     return await get_current_user(authorization)
 
 
+@api_router.get("/auth/username-available")
+async def username_available(
+    u: str = Query(...),
+    authorization: Optional[str] = Header(None),
+):
+    me = await get_current_user(authorization)
+    try:
+        normalized = validate_username(u)
+    except HTTPException as e:
+        return {"available": False, "reason": e.detail}
+    existing = await db.users.find_one(
+        {"username": normalized, "user_id": {"$ne": me.user_id}},
+        {"_id": 0, "user_id": 1},
+    )
+    return {"available": existing is None, "username": normalized}
+
+
+@api_router.post("/auth/complete-profile", response_model=User)
+async def complete_profile(
+    payload: ProfileUpdate,
+    authorization: Optional[str] = Header(None),
+):
+    me = await get_current_user(authorization)
+    display_name = validate_display_name(payload.display_name)
+    username = validate_username(payload.username)
+
+    # Check uniqueness (excluding self so users can re-submit their own)
+    conflict = await db.users.find_one(
+        {"username": username, "user_id": {"$ne": me.user_id}},
+        {"_id": 0, "user_id": 1},
+    )
+    if conflict:
+        raise HTTPException(status_code=409, detail="Username already taken.")
+
+    await db.users.update_one(
+        {"user_id": me.user_id},
+        {"$set": {"display_name": display_name, "username": username}},
+    )
+    updated = await db.users.find_one({"user_id": me.user_id}, {"_id": 0})
+    return User(**updated)
+
+
 @api_router.post("/auth/logout")
 async def auth_logout(authorization: Optional[str] = Header(None)):
     if authorization and authorization.startswith("Bearer "):
@@ -213,12 +289,21 @@ async def search_users(
 ):
     me = await get_current_user(authorization)
     query: Dict = {"user_id": {"$ne": me.user_id}}
-    if q.strip():
-        # Case-insensitive prefix/contains search on name and email
-        query["$or"] = [
-            {"name": {"$regex": q, "$options": "i"}},
-            {"email": {"$regex": q, "$options": "i"}},
-        ]
+    q_stripped = q.strip()
+    if q_stripped:
+        if q_stripped.startswith("@"):
+            uname = q_stripped[1:].lower()
+            if uname:
+                query["username"] = {"$regex": f"^{uname}", "$options": "i"}
+            else:
+                query["username"] = {"$ne": None}
+        else:
+            query["$or"] = [
+                {"name": {"$regex": q_stripped, "$options": "i"}},
+                {"display_name": {"$regex": q_stripped, "$options": "i"}},
+                {"username": {"$regex": q_stripped.lower(), "$options": "i"}},
+                {"email": {"$regex": q_stripped, "$options": "i"}},
+            ]
     cursor = db.users.find(query, {"_id": 0}).limit(50)
     users = await cursor.to_list(50)
     return [User(**u) for u in users]
@@ -524,7 +609,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
 
 @api_router.get("/")
 async def root():
-    return {"message": "SageChat API", "ok": True}
+    return {"message": "Omega Chat API", "ok": True}
 
 
 app.include_router(api_router)
@@ -543,6 +628,11 @@ async def on_startup():
     # Indexes
     await db.users.create_index("email", unique=True)
     await db.users.create_index("user_id", unique=True)
+    await db.users.create_index(
+        "username",
+        unique=True,
+        partialFilterExpression={"username": {"$type": "string"}},
+    )
     await db.user_sessions.create_index("session_token", unique=True)
     await db.user_sessions.create_index("user_id")
     await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)

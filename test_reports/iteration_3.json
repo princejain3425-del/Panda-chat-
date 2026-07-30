@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 3 backend testing complete for Omega Chat. All 65 pytest tests pass (36 regression from iter 1+2, plus 29 new iter-3 tests). New coverage: (1) GET /api/auth/me now returns display_name and username — both null for fresh-signup stub users; (2) GET /api/auth/username-available — 401 without auth, {available:true, username:<normalized_lc>} for valid unused, {available:false} for taken, {available:false, reason} for too-short/too-long/symbol/reserved (admin, omega). Uppercase input is normalized+accepted. Checking one's own currently-claimed username returns available=true; (3) POST /api/auth/complete-profile — 401 without auth, trims display_name, validates length 1–40, rejects usernames not matching ^[a-z0-9_]{3,20}$, normalizes uppercase to lowercase, rejects reserved names (400), returns 409 on conflict (case-insensitive: @ALICE also 409), allows same user to re-submit (change display_name and/or change username); (4) Search by @username with GET /api/users/search?q=@alice — matches username prefix case-insensitively, excludes self; (5) Search without @ prefix now also matches display_name and username fields (regression-friendly for name/email too); (6) Sparse/partial unique index verified — two users can both have username=null (no dup-key), and one can claim a username without affecting the other. Direct DB insert of 2 null-username stub users succeeds. MongoDB _id is not leaked in any response.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_api.py",
+    "/app/backend/tests/test_ws.py",
+    "/app/backend/tests/test_iteration2.py",
+    "/app/backend/tests/test_iteration3.py",
+    "/app/backend/tests/pytest.ini",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py validate_username lowercases input before regex-check, so mixed-case usernames like 'Alice' are accepted and normalized — matches spec. Good.",
+    "server.py /auth/username-available catches HTTPException from validate_username to return 400-detail as 'reason' in a 200 body — this is a good UX pattern (client doesn't need to distinguish 200 vs 400). Verified working.",
+    "Partial unique index on username with partialFilterExpression={username: {$type: 'string'}} correctly allows multiple docs with missing/null username. Confirmed by direct DB inserts and by fixture-based fresh users all coexisting.",
+    "search_users returns up to 50 rows unbounded on empty q — could be expensive at scale; consider requiring q.strip() length >= 1 in prod. Non-blocking.",
+    "server.py still uses deprecated @app.on_event startup/shutdown handlers (carried over from iter 1). Non-blocking.",
+    "ProfileUpdate model requires both display_name and username to be sent on every POST /complete-profile — even for renaming just one field. This is fine per current spec (client always sends both), but worth documenting."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration3.py (new — 29 tests: /auth/me new fields, /auth/username-available, /auth/complete-profile validation+conflict+update, search by @username, sparse index behavior)"
+  ],
+  "success_rate": {"backend": "100% (65/65)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "Reused existing conftest.py fixtures (user_alice/user_bob/user_charlie) — these seed users WITHOUT username/display_name (fresh-signup state), which is exactly what iter-3 tests need. One dedicated test (test_partial_index_allows_multiple_stub_null_users) additionally inserts two temporary stub users with no username directly to confirm the partial unique index accepts multiple nulls, then deletes them in finally.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Full suite at /app/backend/tests/ now has 65 tests: test_api.py (19), test_iteration2.py (12 + 3 WS asyncio), test_iteration3.py (29), test_ws.py (2). Run: `cd /app && python -m pytest backend/tests/ -v`. Backend URL from EXPO_PUBLIC_BACKEND_URL. Auth via stub sessions inserted into MongoDB. All iter-3 endpoints (auth/username-available, auth/complete-profile, users/search @-prefix) fully covered. Fixtures intentionally seed users with NO username to represent post-Google-login fresh signups.",
+  "rca_of_issue": "N/A — all iteration-3 features validated successfully."
+}

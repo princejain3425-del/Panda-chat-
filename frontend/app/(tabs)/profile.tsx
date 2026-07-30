@@ -103,7 +103,10 @@ export default function ProfileScreen() {
               <Text style={themed.avatarText}>{initial}</Text>
             </View>
           )}
-          <Text testID="profile-name" style={themed.name}>{user?.name}</Text>
+          <Text testID="profile-name" style={themed.name}>{user?.display_name || user?.name}</Text>
+          {user?.username && (
+            <Text testID="profile-username" style={themed.username}>@{user.username}</Text>
+          )}
           <Text testID="profile-email" style={themed.email}>{user?.email}</Text>
         </View>
 
@@ -248,6 +251,12 @@ const makeStyles = (colors: Palette) =>
       marginTop: spacing.xs,
       fontSize: typography.base,
       color: colors.onSurfaceSecondary,
+    },
+    username: {
+      marginTop: spacing.xs,
+      fontSize: typography.lg,
+      color: colors.brandPrimary,
+      fontWeight: "700",
     },
     sectionLabel: {
       marginTop: spacing.lg,

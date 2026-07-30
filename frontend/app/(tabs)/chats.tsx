@@ -35,11 +35,12 @@ function Avatar({
   size = 52,
   colors,
 }: {
-  user: { name: string; picture?: string | null };
+  user: { name: string; display_name?: string | null; picture?: string | null };
   size?: number;
   colors: Palette;
 }) {
-  const initial = (user.name || "?").trim().charAt(0).toUpperCase();
+  const label = (user.display_name || user.name || "?").trim();
+  const initial = label.charAt(0).toUpperCase();
   const style = {
     width: size,
     height: size,
@@ -188,7 +189,8 @@ export default function ChatsScreen() {
         pathname: "/chat/[id]",
         params: {
           id: convo.conversation_id,
-          peer_name: convo.peer.name,
+          peer_name: convo.peer.display_name || convo.peer.name,
+          peer_username: convo.peer.username || "",
           peer_picture: convo.peer.picture || "",
           peer_user_id: convo.peer.user_id,
         },
@@ -223,7 +225,7 @@ export default function ChatsScreen() {
             >
               <Avatar user={u} size={56} colors={colors} />
               <Text numberOfLines={1} style={styles.discoverName}>
-                {u.name.split(" ")[0]}
+                {(u.display_name || u.name).split(" ")[0]}
               </Text>
               <View style={styles.discoverBtn}>
                 <Ionicons name="chatbubble-ellipses" size={12} color={colors.onBrandPrimary} />
@@ -303,7 +305,9 @@ export default function ChatsScreen() {
                 <Avatar user={item.peer} colors={colors} />
                 <View style={styles.rowMain}>
                   <View style={styles.rowTopLine}>
-                    <Text style={styles.name} numberOfLines={1}>{item.peer.name}</Text>
+                    <Text style={styles.name} numberOfLines={1}>
+                      {item.peer.display_name || item.peer.name}
+                    </Text>
                     <Text style={styles.time}>
                       {item.updated_at ? formatTime(item.updated_at) : ""}
                     </Text>

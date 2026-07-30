@@ -24,7 +24,7 @@ export default function WelcomeScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   if (!loading && user) {
-    router.replace("/(tabs)/chats");
+    router.replace(user.username ? "/(tabs)/chats" : "/complete-profile");
   }
 
   const handleSignIn = async () => {

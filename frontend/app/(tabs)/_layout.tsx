@@ -12,6 +12,7 @@ export default function TabsLayout() {
 
   if (loading) return null;
   if (!user) return <Redirect href="/welcome" />;
+  if (!user.username) return <Redirect href="/complete-profile" />;
 
   const solidBg = scheme === "dark" ? "rgba(21,19,23,0.75)" : "rgba(255,255,255,0.75)";
 
