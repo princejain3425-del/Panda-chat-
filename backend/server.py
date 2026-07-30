@@ -7,7 +7,7 @@ import logging
 import json
 import uuid
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Literal, Dict
 from datetime import datetime, timezone, timedelta
 import httpx
@@ -76,6 +76,14 @@ def validate_display_name(n: str) -> str:
 
 # ---------- Models ----------
 
+
+def _coerce_utc(v):
+    """Naive datetimes coming from MongoDB are treated as UTC (that's how we stored them)."""
+    if isinstance(v, datetime) and v.tzinfo is None:
+        return v.replace(tzinfo=timezone.utc)
+    return v
+
+
 class User(BaseModel):
     user_id: str
     email: str
@@ -84,6 +92,11 @@ class User(BaseModel):
     username: Optional[str] = None
     picture: Optional[str] = None
     created_at: datetime
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def _fix_created_at(cls, v):
+        return _coerce_utc(v)
 
 
 class SessionCreate(BaseModel):
@@ -145,6 +158,11 @@ class Message(BaseModel):
     filesize: Optional[int] = None
     created_at: datetime
     read_at: Optional[datetime] = None
+
+    @field_validator("created_at", "read_at", mode="before")
+    @classmethod
+    def _fix_dt(cls, v):
+        return _coerce_utc(v)
 
 
 # ---------- Auth helpers ----------
