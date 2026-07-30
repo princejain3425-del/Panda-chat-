@@ -1,0 +1,206 @@
+{
+  "app_name": "SageChat",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "A calm, highly readable messaging experience framed by warm sand tones and sage green accents, prioritizing content clarity and native iOS feel.",
+  "color": {
+    "light": {
+      "surface": "#FDFBF7",
+      "onSurface": "#1C1B1A",
+      "surfaceSecondary": "#F2EFE9",
+      "onSurfaceSecondary": "#4A4846",
+      "surfaceTertiary": "#E6E2DA",
+      "onSurfaceTertiary": "#716F6C",
+      "surfaceInverse": "#1C1B1A",
+      "onSurfaceInverse": "#FDFBF7",
+      "brand": "#5B7454",
+      "brandPrimary": "#5B7454",
+      "onBrandPrimary": "#FFFFFF",
+      "brandSecondary": "#7D9476",
+      "onBrandSecondary": "#FFFFFF",
+      "brandTertiary": "#D4E0D1",
+      "onBrandTertiary": "#1C1B1A",
+      "success": "#3C5C42",
+      "onSuccess": "#FFFFFF",
+      "warning": "#B88B42",
+      "onWarning": "#FFFFFF",
+      "error": "#B5534A",
+      "onError": "#FFFFFF",
+      "border": "#E6E2DA",
+      "borderStrong": "#B8B2AA",
+      "divider": "#EAE6E0"
+    },
+    "dark": {
+      "surface": "#161615",
+      "onSurface": "#FDFBF7",
+      "surfaceSecondary": "#212120",
+      "onSurfaceSecondary": "#B5B3B0",
+      "surfaceTertiary": "#2D2D2B",
+      "onSurfaceTertiary": "#8A8886",
+      "surfaceInverse": "#FDFBF7",
+      "onSurfaceInverse": "#1C1B1A",
+      "brand": "#8CA884",
+      "brandPrimary": "#8CA884",
+      "onBrandPrimary": "#161615",
+      "brandSecondary": "#657C5E",
+      "onBrandSecondary": "#FFFFFF",
+      "brandTertiary": "#2E3A2B",
+      "onBrandTertiary": "#FDFBF7",
+      "success": "#619B6B",
+      "onSuccess": "#161615",
+      "warning": "#D1A763",
+      "onWarning": "#161615",
+      "error": "#DB766D",
+      "onError": "#161615",
+      "border": "#363634",
+      "borderStrong": "#575654",
+      "divider": "#2A2A28"
+    }
+  },
+  "typography": {
+    "displayFontFamily": "Geist",
+    "textFontFamily": "Geist",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Handle spacing correctly dont have extra spaces where its not required, handle padding and margin corectly and subtle for buttons and components",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": 1,
+  "navigation": "bottom_tabs",
+  "icon_set": "Ionicons",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use expo-blur on the bottom tab bar when content scrolls behind it",
+      "Use expo-blur on the sticky top header in the 1-on-1 Chat screen",
+      "Use blur with a translucent tinted base underneath (≥70% of surface) to guarantee foreground text readability"
+    ],
+    "dont's": [
+      "Never blur text bubbles or body content",
+      "Do not apply blur without a tinted base backing it for contrast"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-blur",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Auth / Welcome",
+      "purpose": "A calm, welcoming entry point to authenticate users via Google.",
+      "states": {
+        "loading": "Centered spinner during auth.",
+        "empty": "N/A",
+        "error": "Standard readable message + retry button."
+      },
+      "layout": "Display a beautiful minimal abstract illustration taking up the top half of the screen. Underneath, a clean large display typography welcome message. A full-width 'Continue with Google' button pinned to the bottom safe area (with lg spacing) using brandPrimary or surfaceSecondary to keep it minimal."
+    },
+    {
+      "name": "Chat List",
+      "purpose": "The main inbox where users see all active conversations at a glance.",
+      "states": {
+        "loading": "Skeleton rows of avatars and text lines.",
+        "empty": "Illustration with 'No conversations yet' and a CTA to start a new chat.",
+        "error": "Error loading chats, tap to retry."
+      },
+      "layout": "Persistent top bar with a large 'Chats' title and a search icon. Below, a scrollable list of conversations. Each row features a 44x44 circular avatar, the user's name (lg font), last message preview (base font, onSurfaceTertiary), and timestamp right-aligned. Use a floating action button (FAB) in the bottom right corner with a glass/blur effect for 'New Chat'."
+    },
+    {
+      "name": "1-on-1 Chat",
+      "purpose": "The core real-time messaging thread.",
+      "states": {
+        "loading": "Spinner in the center.",
+        "empty": "A quiet prompt like 'Say hi' centered in the screen.",
+        "error": "Failed to send indicator next to specific messages."
+      },
+      "layout": "Glass header floating at the top with a back button, peer's avatar, and name. Scrollable conversation body with messages grouped by sender. Received messages use surfaceTertiary background with onSurface text, aligned left. Sent messages use brandPrimary background with onBrandPrimary text, aligned right. Generous vertical spacing. Footer is a fixed input bar with a text field, an attachment icon (for media), and a send button, adhering to KeyboardAvoidingView and safe area."
+    },
+    {
+      "name": "New Chat / Search",
+      "purpose": "Find and select a user to start a new conversation.",
+      "states": {
+        "loading": "Searching indicator.",
+        "empty": "No users found.",
+        "error": "Error fetching users."
+      },
+      "layout": "Opens as a modal or pushed screen. Focus starts in a sticky search bar at the top. Below is a list of contacts/users similar to the Chat List layout but without message previews. Tap a user to immediately open a 1-on-1 chat."
+    },
+    {
+      "name": "Profile",
+      "purpose": "User management and sign-out.",
+      "states": {
+        "loading": "Spinner.",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Simple column layout. Top section features the user's large avatar and name. Below, a settings list with options like 'Notifications', 'Privacy', and 'Sign Out'. Use tinted icon containers (brandTertiary rounded squares) for the list icons."
+    }
+  ],
+  "haptics": {
+    "events": {
+      "message_sent": "impactLight",
+      "message_received": "notificationSuccess",
+      "new_chat_fab_tap": "impactMedium",
+      "send_button_tap": "impactLight",
+      "auth_success": "notificationSuccess"
+    }
+  },
+  "images": {
+    "auth_illustration": {
+      "url": "https://images.unsplash.com/photo-1765498173413-b428f5d0a17e",
+      "alt": "Minimal continuous line art portrait illustration"
+    },
+    "google_logo": {
+      "url": "https://images.unsplash.com/photo-1662947190722-5d272f82a526",
+      "alt": "Google logo"
+    },
+    "avatar_woman": {
+      "url": "https://images.unsplash.com/photo-1553613189-dae7ee4aeba6",
+      "alt": "Candid portrait of a young woman"
+    },
+    "avatar_man": {
+      "url": "https://images.unsplash.com/photo-1542458579-bc6f69b5ce6b",
+      "alt": "Candid portrait of a young man"
+    },
+    "shared_media_example": {
+      "url": "https://images.unsplash.com/photo-1610123172763-1f587473048f",
+      "alt": "Beautiful cozy interior architecture photo shared in chat"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly adhere to the 1 iOS-Native Clean personality. Use the exact hex codes provided: Sage green for primary actions, off-whites for surfaces.",
+    "Do NOT use any shade of blue, purple, or indigo anywhere in the app.",
+    "Ensure the Chat screen has a properly functioning KeyboardAvoidingView and the input bar stays pinned securely above the keyboard.",
+    "Text bubbles: Use surfaceTertiary for received messages and brandPrimary for sent messages. Ensure pill-like rounded corners with consistent radii across mixed media.",
+    "For the Google Auth button, if using a vector icon, ensure it looks professional, otherwise default to standard iOS styling with the Google icon.",
+    "Use glass/blur effects specifically on the tab bar and the top header inside the 1-on-1 Chat screen. The underlying blur tint must be strong enough to ensure readability.",
+    "Implement subtle haptic feedback using expo-haptics when sending a message and pressing primary buttons.",
+    "If text is placed over the shared media image in the chat, apply the mandatory vertical gradient-to-dark scrim pattern."
+  ]
+}
