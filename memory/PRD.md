@@ -32,10 +32,11 @@ Panda Chat is a warm, playful mobile chat app themed around a **white + panda gr
 - `GET /api/conversations`, `POST /api/conversations`
 - `GET /api/conversations/{id}/messages`, `POST /api/conversations/{id}/messages` — types: text | image | video | **document**
 - `POST /api/conversations/{id}/read`
-- `WS /api/ws?token=`
+- `GET /api/presence?ids=<comma-separated user_ids>`
+- `WS /api/ws?token=` — events: `connected`, `message`, `read`, `typing`, `presence`, `pong`
 
 ## Testing
-- Backend: **80/80 pytest cases passing** (iter-1: 21, iter-2: 15, iter-3: 29, iter-4: 15 for document type).
+- Backend: **92/92 pytest cases passing** (iter-1: 21, iter-2: 15, iter-3: 29, iter-4: 15 for document type, iter-5: 12 for presence).
 
 ## Multi-user testing
 - The Expo Go QR code and web preview URL are public. Multiple people can sign in with different Google accounts and chat with each other in real-time — the shared MongoDB backend handles all sessions.
