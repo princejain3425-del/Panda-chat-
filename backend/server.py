@@ -8,18 +8,21 @@ import json
 import uuid
 from pathlib import Path
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Optional, Literal, Dict
+from typing import List, Optional, Literal, Dict, Set, Any
 from datetime import datetime, timezone, timedelta
 import httpx
-
+import asyncio
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(str(ROOT_DIR / ".env"))
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+MONGO_URL = os.getenv("MONGO_URL")
+DB_NAME = os.getenv("DB_NAME")
+if not MONGO_URL or not DB_NAME:
+    raise RuntimeError("MONGO_URL and DB_NAME must be set in environment or in a .env file")
+
+client = AsyncIOMotorClient(MONGO_URL)
+db = client[DB_NAME]
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -45,6 +48,19 @@ def ensure_aware(dt: datetime) -> datetime:
 
 def make_id(prefix: str = "id") -> str:
     return f"{prefix}_{uuid.uuid4().hex[:12]}"
+
+
+def _serialize_for_ws(obj: Any) -> Any:
+    """Recursively convert datetimes to ISO strings so websocket payloads are JSON-safe."""
+    if obj is None:
+        return None
+    if isinstance(obj, datetime):
+        return obj.astimezone(timezone.utc).isoformat()
+    if isinstance(obj, dict):
+        return {k: _serialize_for_ws(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_serialize_for_ws(v) for v in obj]
+    return obj
 
 
 USERNAME_RE = __import__("re").compile(r"^[a-z0-9_]{3,20}$")
@@ -92,6 +108,7 @@ class User(BaseModel):
     username: Optional[str] = None
     picture: Optional[str] = None
     created_at: datetime
+    push_tokens: Optional[List[str]] = None
 
     @field_validator("created_at", mode="before")
     @classmethod
@@ -126,6 +143,11 @@ class Conversation(BaseModel):
     last_message_type: Optional[str] = None
     last_sender_id: Optional[str] = None
 
+    @field_validator("created_at", "updated_at", mode="before")
+    @classmethod
+    def _fix_dt(cls, v):
+        return _coerce_utc(v)
+
 
 class ConversationView(BaseModel):
     conversation_id: str
@@ -135,6 +157,11 @@ class ConversationView(BaseModel):
     last_sender_id: Optional[str] = None
     updated_at: datetime
     unread_count: int = 0
+
+    @field_validator("updated_at", mode="before")
+    @classmethod
+    def _fix_updated_at(cls, v):
+        return _coerce_utc(v)
 
 
 class MessageCreate(BaseModel):
@@ -200,13 +227,19 @@ async def get_user_by_token(token: str) -> Optional[User]:
 async def create_session(payload: SessionCreate):
     """Verify Emergent session token, upsert user, store our own session."""
     async with httpx.AsyncClient(timeout=15.0) as http:
-        r = await http.get(
-            "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-            headers={"X-Session-ID": payload.session_token},
-        )
-    if r.status_code != 200:
-        raise HTTPException(status_code=401, detail="Invalid Emergent session")
-    data = r.json()
+        try:
+            r = await http.get(
+                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                headers={"X-Session-ID": payload.session_token},
+            )
+            r.raise_for_status()
+            data = r.json()
+        except httpx.HTTPStatusError:
+            raise HTTPException(status_code=401, detail="Invalid Emergent session")
+        except Exception:
+            logger.exception("Error verifying Emergent session")
+            raise HTTPException(status_code=502, detail="Failed to verify session with auth provider")
+
     email = data.get("email")
     name = data.get("name") or (email.split("@")[0] if email else "User")
     picture = data.get("picture")
@@ -302,6 +335,27 @@ async def auth_logout(authorization: Optional[str] = Header(None)):
     return {"ok": True}
 
 
+# Push-token endpoints
+@api_router.post("/auth/push-token")
+async def register_push_token(payload: dict, authorization: Optional[str] = Header(None)):
+    me = await get_current_user(authorization)
+    token = (payload or {}).get("token")
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing token")
+    await db.users.update_one({"user_id": me.user_id}, {"$addToSet": {"push_tokens": token}})
+    return {"ok": True}
+
+
+@api_router.post("/auth/push-token/unregister")
+async def unregister_push_token(payload: dict, authorization: Optional[str] = Header(None)):
+    me = await get_current_user(authorization)
+    token = (payload or {}).get("token")
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing token")
+    await db.users.update_one({"user_id": me.user_id}, {"$pull": {"push_tokens": token}})
+    return {"ok": True}
+
+
 # ---------- Users ----------
 
 @api_router.get("/users/search", response_model=List[User])
@@ -348,6 +402,25 @@ async def discover_users(authorization: Optional[str] = Header(None)):
     ).sort("created_at", -1).limit(12)
     users = await cursor.to_list(12)
     return [User(**u) for u in users]
+
+
+# Expo push helper
+EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
+
+async def send_expo_push_messages(messages: List[Dict[str, Any]]):
+    if not messages:
+        return
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        chunk_size = 100
+        for i in range(0, len(messages), chunk_size):
+            chunk = messages[i:i+chunk_size]
+            try:
+                r = await client.post(EXPO_PUSH_URL, json=chunk)
+                r.raise_for_status()
+                resp = r.json()
+                logger.debug("Expo push response: %s", resp)
+            except Exception:
+                logger.exception("Failed to send expo push chunk")
 
 
 # ---------- Conversations ----------
@@ -505,11 +578,38 @@ async def send_message(
 
     message = Message(**msg_doc)
     # Broadcast to peers via WebSocket
-    await ws_manager.broadcast_to_conversation(
-        conversation_id,
-        {"event": "message", "data": json.loads(message.model_dump_json())},
-        participants=convo["participants"],
-    )
+    try:
+        await ws_manager.broadcast_to_conversation(
+            conversation_id,
+            {"event": "message", "data": _serialize_for_ws(message.model_dump())},
+            participants=convo.get("participants", []),
+        )
+    except Exception:
+        logger.exception("Failed to broadcast message %s in convo %s", message.message_id, conversation_id)
+
+    # Send push notifications via Expo to other participants (if they have tokens)
+    try:
+        recipients = [uid for uid in convo.get("participants", []) if uid != me.user_id]
+        if recipients:
+            cursor = db.users.find({"user_id": {"$in": recipients}}, {"_id": 0, "push_tokens": 1, "display_name": 1})
+            messages_to_send: List[Dict[str, Any]] = []
+            async for u in cursor:
+                push_tokens = u.get("push_tokens") or []
+                display_name = u.get("display_name") or "New message"
+                for tk in push_tokens:
+                    if not tk:
+                        continue
+                    messages_to_send.append({
+                        "to": tk,
+                        "title": f"{me.display_name or me.name}",
+                        "body": message.text or "Sent an attachment",
+                        "data": {"conversation_id": conversation_id, "message_id": message.message_id},
+                    })
+            if messages_to_send:
+                await send_expo_push_messages(messages_to_send)
+    except Exception:
+        logger.exception("Failed preparing or sending push notifications")
+
     return message
 
 
@@ -556,41 +656,53 @@ async def mark_conversation_read(
 class WSManager:
     def __init__(self):
         # user_id -> set of websockets
-        self.connections: Dict[str, List[WebSocket]] = {}
+        self.connections: Dict[str, Set[WebSocket]] = {}
+        self._lock = asyncio.Lock()
 
-    def is_online(self, user_id: str) -> bool:
-        return user_id in self.connections and len(self.connections[user_id]) > 0
+    async def is_online(self, user_id: str) -> bool:
+        async with self._lock:
+            conns = self.connections.get(user_id)
+            return bool(conns)
 
-    def online_users(self) -> List[str]:
-        return list(self.connections.keys())
+    async def online_users(self) -> List[str]:
+        async with self._lock:
+            return list(self.connections.keys())
 
     async def connect(self, user_id: str, ws: WebSocket):
         await ws.accept()
-        first = user_id not in self.connections
-        self.connections.setdefault(user_id, []).append(ws)
+        async with self._lock:
+            first = user_id not in self.connections or len(self.connections[user_id]) == 0
+            self.connections.setdefault(user_id, set()).add(ws)
         return first  # True if this is the first ws for this user
 
-    def disconnect(self, user_id: str, ws: WebSocket) -> bool:
+    async def disconnect(self, user_id: str, ws: WebSocket) -> bool:
         """Return True if the user has NO more connections after this disconnect."""
-        if user_id in self.connections:
-            try:
-                self.connections[user_id].remove(ws)
-            except ValueError:
-                pass
-            if not self.connections[user_id]:
-                del self.connections[user_id]
+        async with self._lock:
+            if user_id not in self.connections:
+                return False
+            self.connections[user_id].discard(ws)
+            if not self.connections.get(user_id):
+                # ensure removal if empty
+                if user_id in self.connections:
+                    del self.connections[user_id]
                 return True
         return False
 
     async def send_to_user(self, user_id: str, message: dict):
-        for ws in list(self.connections.get(user_id, [])):
+        # copy connection list under lock to avoid holding lock while sending
+        async with self._lock:
+            conns = list(self.connections.get(user_id, set()))
+        for ws in conns:
             try:
                 await ws.send_json(message)
+            except WebSocketDisconnect:
+                # Clean up disconnected socket
+                await self.disconnect(user_id, ws)
             except Exception:
-                self.disconnect(user_id, ws)
+                logger.exception("Failed to send websocket message to %s", user_id)
 
     async def broadcast_to_conversation(self, conversation_id: str, message: dict, participants: List[str]):
-        for uid in participants:
+        for uid in participants or []:
             await self.send_to_user(uid, message)
 
 
@@ -622,7 +734,10 @@ async def get_presence(
     """Return {user_id: is_online} for the requested comma-separated ids."""
     await get_current_user(authorization)
     id_list = [i.strip() for i in ids.split(",") if i.strip()]
-    return {uid: ws_manager.is_online(uid) for uid in id_list}
+    out = {}
+    for uid in id_list:
+        out[uid] = await ws_manager.is_online(uid)
+    return out
 
 
 @app.websocket("/api/ws")
@@ -637,42 +752,47 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
     try:
         await websocket.send_json({"event": "connected", "user_id": user.user_id})
         while True:
-            data = await websocket.receive_text()
+            try:
+                data = await websocket.receive_text()
+            except WebSocketDisconnect:
+                break
+            except Exception:
+                logger.exception("Error receiving from websocket for user %s", user.user_id)
+                break
+
             try:
                 payload = json.loads(data)
-                event = payload.get("event")
-                if event == "ping":
-                    await websocket.send_json({"event": "pong"})
-                elif event == "typing":
-                    convo_id = payload.get("conversation_id")
-                    is_typing = bool(payload.get("is_typing"))
-                    if not convo_id:
+            except json.JSONDecodeError:
+                logger.warning("Malformed websocket payload from user %s: %r", user.user_id, data)
+                continue
+
+            event = payload.get("event")
+            if event == "ping":
+                await websocket.send_json({"event": "pong"})
+            elif event == "typing":
+                convo_id = payload.get("conversation_id")
+                is_typing = bool(payload.get("is_typing"))
+                if not convo_id:
+                    continue
+                convo = await db.conversations.find_one(
+                    {"conversation_id": convo_id, "participants": user.user_id},
+                    {"_id": 0, "participants": 1},
+                )
+                if not convo:
+                    continue
+                for uid in convo["participants"]:
+                    if uid == user.user_id:
                         continue
-                    convo = await db.conversations.find_one(
-                        {"conversation_id": convo_id, "participants": user.user_id},
-                        {"_id": 0, "participants": 1},
-                    )
-                    if not convo:
-                        continue
-                    for uid in convo["participants"]:
-                        if uid == user.user_id:
-                            continue
-                        await ws_manager.send_to_user(uid, {
-                            "event": "typing",
-                            "data": {
-                                "conversation_id": convo_id,
-                                "user_id": user.user_id,
-                                "is_typing": is_typing,
-                            },
-                        })
-            except Exception:
-                pass
-    except WebSocketDisconnect:
-        last = ws_manager.disconnect(user.user_id, websocket)
-        if last:
-            await broadcast_presence(user.user_id, False)
-    except Exception:
-        last = ws_manager.disconnect(user.user_id, websocket)
+                    await ws_manager.send_to_user(uid, {
+                        "event": "typing",
+                        "data": {
+                            "conversation_id": convo_id,
+                            "user_id": user.user_id,
+                            "is_typing": is_typing,
+                        },
+                    })
+    finally:
+        last = await ws_manager.disconnect(user.user_id, websocket)
         if last:
             await broadcast_presence(user.user_id, False)
 
